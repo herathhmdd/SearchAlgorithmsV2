@@ -201,26 +201,35 @@ function populateCityDropdowns() {
     // Sort cities alphabetically
     const sortedCities = [...graphData.nodes].sort((a, b) => a.id.localeCompare(b.id));
     
-    // Clear existing options
-    startCitySelect.innerHTML = '<option value="">Select start city</option>';
-    destCitySelect.innerHTML = '<option value="">Select destination city</option>';
+    // Filter capital cities for start dropdown
+    const capitalCities = sortedCities.filter(city => city.type === 'capitol');
     
-    // Add city options
-    sortedCities.forEach(city => {
+    // Filter DEC cities for destination dropdown
+    const decCities = sortedCities.filter(city => city.type === 'dec');
+    
+    // Clear existing options
+    startCitySelect.innerHTML = '<option value="">Select start city (Capital only)</option>';
+    destCitySelect.innerHTML = '<option value="">Select destination city (DEC only)</option>';
+    
+    // Add capital cities only to start dropdown
+    capitalCities.forEach(city => {
         const startOption = document.createElement('option');
         startOption.value = city.id;
-        startOption.textContent = `${city.id} (${city.type === 'capitol' ? 'Capital' : 'DEC'})`;
+        startOption.textContent = `${city.id} (Capital)`;
         startCitySelect.appendChild(startOption);
-        
+    });
+    
+    // Add DEC cities only to destination dropdown
+    decCities.forEach(city => {
         const destOption = document.createElement('option');
         destOption.value = city.id;
-        destOption.textContent = `${city.id} (${city.type === 'capitol' ? 'Capital' : 'DEC'})`;
+        destOption.textContent = `${city.id} (DEC)`;
         destCitySelect.appendChild(destOption);
     });
     
     // Set default values for demonstration
     startCitySelect.value = 'Colombo';
-    destCitySelect.value = 'Jaffna';
+    destCitySelect.value = 'Dambulla'; // Changed to a DEC city
 }
 
 /**
