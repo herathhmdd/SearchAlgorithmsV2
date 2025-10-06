@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Algorithms Visualization - Sri Lankan Cities</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Control Panel -->
+    <div class="bg-white shadow-lg p-6">
+        <div class="max-w-7xl mx-auto">
+            <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
+                Search Algorithms Visualization on Sri Lankan Cities
+            </h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <!-- Algorithm Selection -->
+                <div>
+                    <label for="algorithm" class="block text-sm font-medium text-gray-700 mb-2">
+                        Search Algorithm
+                    </label>
+                    <select id="algorithm" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <optgroup label="Uninformed Search">
+                            <option value="bfs">Breadth-First Search (BFS)</option>
+                            <option value="dfs">Depth-First Search (DFS)</option>
+                            <option value="ucs">Uniform-Cost Search (UCS)</option>
+                            <option value="dls">Depth-Limited Search (DLS)</option>
+                            <option value="iddfs">Iterative Deepening DFS (IDDFS)</option>
+                            <option value="bidirectional">Bidirectional Search</option>
+                        </optgroup>
+                        <optgroup label="Informed Search">
+                            <option value="greedy">Greedy Best-First Search</option>
+                            <option value="astar">A* Search</option>
+                        </optgroup>
+                    </select>
+                </div>
+
+                <!-- Start City -->
+                <div>
+                    <label for="startCity" class="block text-sm font-medium text-gray-700 mb-2">
+                        Start City
+                    </label>
+                    <select id="startCity" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Destination City -->
+                <div>
+                    <label for="destCity" class="block text-sm font-medium text-gray-700 mb-2">
+                        Destination City
+                    </label>
+                    <select id="destCity" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <!-- Options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <!-- Start Search Button -->
+                <div>
+                    <button id="startSearch" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
+                        Start Search
+                    </button>
+                </div>
+            </div>
+
+            <!-- Depth Limit Input (for DLS) -->
+            <div id="depthLimitContainer" class="mt-4 hidden">
+                <label for="depthLimit" class="block text-sm font-medium text-gray-700 mb-2">
+                    Depth Limit
+                </label>
+                <input type="number" id="depthLimit" value="5" min="1" max="20" 
+                       class="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+    </div>
+
+    <!-- Results and Legend Section -->
+    <div class="bg-white shadow-lg mt-4 p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Search Results -->
+                <div class="lg:col-span-2">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Search Results</h2>
+                    <div id="searchResults" class="space-y-2">
+                        <p class="text-gray-600">Select cities and click "Start Search" to begin.</p>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Legend</h2>
+                    <div class="space-y-3">
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-blue-500 rounded-full mr-3"></div>
+                            <span class="text-sm text-gray-700">Capital Cities</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-green-500 rounded-full mr-3"></div>
+                            <span class="text-sm text-gray-700">Dedicated Economic Centers</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-yellow-400 rounded-full mr-3"></div>
+                            <span class="text-sm text-gray-700">Currently Exploring</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-red-500 rounded-full mr-3"></div>
+                            <span class="text-sm text-gray-700">Final Path</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-1 bg-gray-400 mr-3"></div>
+                            <span class="text-sm text-gray-700">Roads (with distances)</span>
+                        </div>
+                    </div>
+
+                    <!-- Algorithm Complexity Info -->
+                    <div id="complexityInfo" class="mt-6 p-4 bg-gray-100 rounded-lg hidden">
+                        <h3 class="font-medium text-gray-800 mb-2">Algorithm Complexity</h3>
+                        <div id="complexityDetails" class="text-sm text-gray-600">
+                            <!-- Complexity information will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Graph Visualization -->
+    <div class="bg-white shadow-lg mt-4 p-6">
+        <div class="max-w-7xl mx-auto">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Map Visualization</h2>
+            <div id="graphContainer" class="w-full h-96 lg:h-[600px] border border-gray-300 rounded-lg overflow-hidden">
+                <!-- D3.js visualization will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="bg-white shadow-lg mt-4 p-6">
+        <div class="max-w-7xl mx-auto text-center">
+            <div class="space-x-4">
+                <button id="pauseBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md transition duration-200 hidden">
+                    Pause
+                </button>
+                <button id="resumeBtn" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md transition duration-200 hidden">
+                    Resume
+                </button>
+                <button id="resetBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition duration-200">
+                    Reset
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
