@@ -58,6 +58,15 @@
                     </select>
                 </div>
 
+                <!-- Secondary Dedicated Economic Center -->
+                <div>
+                    <label for="secondDecCity" class="block text-sm font-medium text-gray-700 mb-2">
+                        Secondary Dedicated Economic Center
+                    </label>
+                    <select id="secondDecCity" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </select>
+                </div>
+
                 <!-- Start Search Button -->
                 <div>
                     <button id="startSearch" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
@@ -86,6 +95,9 @@
                     <h2 class="text-xl font-semibold text-gray-800 mb-4">Search Results</h2>
                     <div id="searchResults" class="space-y-2">
                         <p class="text-gray-600">Select cities and click "Start Search" to begin.</p>
+                    </div>
+                    <div id="searchResultsSecond" class="space-y-2 mt-6 hidden">
+                        <!-- Second DEC search results will be shown here -->
                     </div>
                 </div>
 
@@ -154,6 +166,6 @@
         </div>
     </div>
 
-    <script src="scripts.js?v=3"></script>
+    <script src="scripts.js?v=4"></script>
 </body>
 </html>

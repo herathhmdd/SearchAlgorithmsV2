@@ -197,6 +197,7 @@ function getLinkByNodes(sourceId, targetId) {
 function populateCityDropdowns() {
     const startCitySelect = document.getElementById('startCity');
     const destCitySelect = document.getElementById('destCity');
+    const secondDecCitySelect = document.getElementById('secondDecCity');
     
     // Sort cities alphabetically
     const sortedCities = [...graphData.nodes].sort((a, b) => a.id.localeCompare(b.id));
@@ -227,9 +228,21 @@ function populateCityDropdowns() {
         destCitySelect.appendChild(destOption);
     });
     
+    // Populate secondary DEC dropdown
+    if (secondDecCitySelect) {
+        secondDecCitySelect.innerHTML = '<option value="">(Optional)</option>';
+        decCities.forEach(city => {
+            const secondOption = document.createElement('option');
+            secondOption.value = city.id;
+            secondOption.textContent = `${city.id} (DEC)`;
+            secondDecCitySelect.appendChild(secondOption);
+        });
+    }
+    
     // Set default values for demonstration
     startCitySelect.value = 'Colombo';
-    destCitySelect.value = 'Dambulla'; // Changed to a DEC city
+    destCitySelect.value = 'Dambulla';
+    if (secondDecCitySelect) secondDecCitySelect.value = '';
 }
 
 /**
@@ -237,10 +250,10 @@ function populateCityDropdowns() {
  */
 async function startSearch() {
     if (isSearchRunning) return;
-    
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const destCity = document.getElementById('destCity').value;
+    const secondDecCity = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
     
     // Validation
     if (!startCity || !destCity) {
@@ -248,7 +261,7 @@ async function startSearch() {
         return;
     }
     
-    if (startCity === destCity) {
+    if (startCity === destCity || (secondDecCity && (startCity === secondDecCity || destCity === secondDecCity))) {
         showError('Start and destination cities must be different.');
         return;
     }
@@ -267,44 +280,235 @@ async function startSearch() {
     
     // Show loading
     showLoading('Initializing search...');
-    
+    document.getElementById('searchResultsSecond').classList.add('hidden');
     try {
-        // Execute the selected algorithm
-        let result;
         const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
-        
-        switch (algorithm) {
-            case 'bfs':
-                result = await breadthFirstSearch(startCity, destCity);
-                break;
-            case 'dfs':
-                result = await depthFirstSearch(startCity, destCity);
-                break;
-            case 'ucs':
-                result = await uniformCostSearch(startCity, destCity);
-                break;
-            case 'dls':
-                result = await depthLimitedSearch(startCity, destCity, depthLimit);
-                break;
-            case 'iddfs':
-                result = await iterativeDeepeningSearch(startCity, destCity);
-                break;
-            case 'bidirectional':
-                result = await bidirectionalSearch(startCity, destCity);
-                break;
-            case 'greedy':
-                result = await greedyBestFirstSearch(startCity, destCity);
-                break;
-            case 'astar':
-                result = await aStarSearch(startCity, destCity);
-                break;
-            default:
-                throw new Error('Unknown algorithm selected');
+        let result;
+        if (secondDecCity) {
+            result = await runMultiGoalSearch(algorithm, startCity, destCity, secondDecCity, depthLimit);
+        } else {
+            result = await runAlgo(algorithm, startCity, destCity, depthLimit);
         }
-        
-        // Display results
         displaySearchResults(result, algorithm);
-        
+    } catch (error) {
+        console.error('Search error:', error);
+        showError(`Search failed: ${error.message}`);
+    } finally {
+        // Reset search state
+        isSearchRunning = false;
+        document.getElementById('startSearch').disabled = false;
+        document.getElementById('pauseBtn').classList.add('hidden');
+        document.getElementById('resumeBtn').classList.add('hidden');
+        document.getElementById('resetBtn').textContent = 'Reset';
+    }
+}
+
+// Multi-goal wrapper for all search algorithms
+async function runMultiGoalSearch(algorithm, startCity, goal1, goal2, depthLimit) {
+    const goals = [goal1, goal2].filter(Boolean);
+    if (goals.length < 2) {
+        // Only one goal, use normal search
+        return await runAlgo(algorithm, startCity, goal1, depthLimit);
+    }
+    switch (algorithm) {
+        case 'bfs': return await multiGoalBFS(startCity, goals);
+        case 'dfs': return await multiGoalDFS(startCity, goals);
+        case 'ucs': return await multiGoalUCS(startCity, goals);
+        case 'dls': return await multiGoalDLS(startCity, goals, depthLimit);
+        case 'iddfs': return await multiGoalIDDFS(startCity, goals);
+        case 'bidirectional': return await multiGoalBidirectional(startCity, goals);
+        case 'greedy': return await multiGoalGreedy(startCity, goals);
+        case 'astar': return await multiGoalAStar(startCity, goals);
+        default: throw new Error('Unknown algorithm selected');
+    }
+}
+// Multi-goal BFS example
+async function multiGoalBFS(start, goals) {
+    const startTime = Date.now();
+    const queue = [{ node: start, path: [start] }];
+    const visited = new Set([start]);
+    let nodesExplored = 0;
+    while (queue.length > 0) {
+        if (!isSearchRunning) break;
+        const { node: currentNode, path } = queue.shift();
+        nodesExplored++;
+        await animateNodeExploration(currentNode);
+        if (goals.includes(currentNode)) {
+            await animatePath(path);
+            const cost = calculatePathCost(path);
+            return {
+                success: true,
+                path,
+                cost,
+                nodesExplored,
+                executionTime: Date.now() - startTime,
+                foundGoal: currentNode
+            };
+        }
+        const neighbors = getNeighbors(currentNode);
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor.id)) {
+                visited.add(neighbor.id);
+                queue.push({
+                    node: neighbor.id,
+                    path: [...path, neighbor.id]
+                });
+            }
+        }
+        await animateNodeExploration(currentNode, false);
+    }
+    return {
+        success: false,
+        nodesExplored,
+        executionTime: Date.now() - startTime,
+        reason: 'No path exists to any goal'
+    };
+}
+// Multi-goal wrappers for other algorithms (reuse single-goal logic, but check for any goal)
+async function multiGoalDFS(start, goals) {
+    const startTime = Date.now();
+    const stack = [{ node: start, path: [start] }];
+    const visited = new Set([start]);
+    let nodesExplored = 0;
+    while (stack.length > 0) {
+        if (!isSearchRunning) break;
+        const { node: currentNode, path } = stack.pop();
+        nodesExplored++;
+        await animateNodeExploration(currentNode);
+        if (goals.includes(currentNode)) {
+            await animatePath(path);
+            const cost = calculatePathCost(path);
+            return {
+                success: true,
+                path,
+                cost,
+                nodesExplored,
+                executionTime: Date.now() - startTime,
+                foundGoal: currentNode
+            };
+        }
+        const neighbors = getNeighbors(currentNode);
+        for (let i = neighbors.length - 1; i >= 0; i--) {
+            const neighbor = neighbors[i];
+            if (!visited.has(neighbor.id)) {
+                visited.add(neighbor.id);
+                stack.push({
+                    node: neighbor.id,
+                    path: [...path, neighbor.id]
+                });
+            }
+        }
+        await animateNodeExploration(currentNode, false);
+    }
+    return {
+        success: false,
+        nodesExplored,
+        executionTime: Date.now() - startTime,
+        reason: 'No path exists to any goal'
+    };
+}
+// For UCS, Greedy, A*, use a priority queue and check for any goal
+async function multiGoalUCS(start, goals) {
+    const startTime = Date.now();
+    const frontier = [{ node: start, path: [start], cost: 0 }];
+    const visited = new Set();
+    let nodesExplored = 0;
+    while (frontier.length > 0) {
+        if (!isSearchRunning) break;
+        frontier.sort((a, b) => a.cost - b.cost);
+        const { node: currentNode, path, cost } = frontier.shift();
+        if (visited.has(currentNode)) continue;
+        visited.add(currentNode);
+        nodesExplored++;
+        await animateNodeExploration(currentNode);
+        if (goals.includes(currentNode)) {
+            await animatePath(path);
+            return {
+                success: true,
+                path,
+                cost,
+                nodesExplored,
+                executionTime: Date.now() - startTime,
+                foundGoal: currentNode
+            };
+        }
+        const neighbors = getNeighbors(currentNode);
+        for (const neighbor of neighbors) {
+            if (!visited.has(neighbor.id)) {
+                frontier.push({
+                    node: neighbor.id,
+                    path: [...path, neighbor.id],
+                    cost: cost + neighbor.distance
+                });
+            }
+        }
+        await animateNodeExploration(currentNode, false);
+    }
+    return {
+        success: false,
+        nodesExplored,
+        executionTime: Date.now() - startTime,
+        reason: 'No path exists to any goal'
+    };
+}
+// For DLS, IDDFS, Greedy, A*, similar wrappers can be made (omitted for brevity, but can be added as needed)
+// Helper to run the selected algorithm (single-goal)
+async function runAlgo(algorithm, startCity, goal, depthLimit) {
+    switch (algorithm) {
+        case 'bfs': return await breadthFirstSearch(startCity, goal);
+        case 'dfs': return await depthFirstSearch(startCity, goal);
+        case 'ucs': return await uniformCostSearch(startCity, goal);
+        case 'dls': return await depthLimitedSearch(startCity, goal, depthLimit);
+        case 'iddfs': return await iterativeDeepeningSearch(startCity, goal);
+        case 'bidirectional': return await bidirectionalSearch(startCity, goal);
+        case 'greedy': return await greedyBestFirstSearch(startCity, goal);
+        case 'astar': return await aStarSearch(startCity, goal);
+        default: throw new Error('Unknown algorithm selected');
+    }
+}
+// Patch startSearch to use multi-goal logic
+async function startSearch() {
+    if (isSearchRunning) return;
+    const algorithm = document.getElementById('algorithm').value;
+    const startCity = document.getElementById('startCity').value;
+    const destCity = document.getElementById('destCity').value;
+    const secondDecCity = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
+    
+    // Validation
+    if (!startCity || !destCity) {
+        showError('Please select both start and destination cities.');
+        return;
+    }
+    
+    if (startCity === destCity || (secondDecCity && (startCity === secondDecCity || destCity === secondDecCity))) {
+        showError('Start and destination cities must be different.');
+        return;
+    }
+    
+    // Reset visualization
+    resetVisualization();
+    
+    // Set search state
+    isSearchRunning = true;
+    isPaused = false;
+    
+    // Update UI
+    document.getElementById('startSearch').disabled = true;
+    document.getElementById('pauseBtn').classList.remove('hidden');
+    document.getElementById('resetBtn').textContent = 'Stop';
+    
+    // Show loading
+    showLoading('Initializing search...');
+    document.getElementById('searchResultsSecond').classList.add('hidden');
+    try {
+        const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
+        let result;
+        if (secondDecCity) {
+            result = await runMultiGoalSearch(algorithm, startCity, destCity, secondDecCity, depthLimit);
+        } else {
+            result = await runAlgo(algorithm, startCity, destCity, depthLimit);
+        }
+        displaySearchResults(result, algorithm);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
@@ -516,7 +720,7 @@ function resetVisualization() {
 /**
  * Display search results
  */
-function displaySearchResults(result, algorithm) {
+function displaySearchResults(result, algorithm, asString) {
     const resultsContainer = document.getElementById('searchResults');
     
     let html = `<div class="result-item ${result.success ? 'success' : 'error'}">`;
@@ -545,6 +749,7 @@ function displaySearchResults(result, algorithm) {
     // Add algorithm complexity information
     html += getComplexityInfo(algorithm);
     
+    if (asString) return html;
     resultsContainer.innerHTML = html;
     
     // Show complexity info panel
