@@ -77,6 +77,22 @@ function setupEventListeners() {
     document.getElementById('pauseBtn').addEventListener('click', pauseSearch);
     document.getElementById('resumeBtn').addEventListener('click', resumeSearch);
     document.getElementById('resetBtn').addEventListener('click', resetVisualization);
+    
+    // Hide/Show Results Panel
+    const toggleBtn = document.getElementById('toggleResultsPanel');
+    const resultsPanel = document.getElementById('resultsPanel');
+    const resultsContent = document.getElementById('resultsContent');
+    let panelVisible = true;
+    if (toggleBtn && resultsContent) {
+        toggleBtn.addEventListener('click', function() {
+            panelVisible = !panelVisible;
+            if (panelVisible) {
+                resultsContent.classList.remove('hidden');
+            } else {
+                resultsContent.classList.add('hidden');
+            }
+        });
+    }
 }
 
 /**
@@ -168,10 +184,16 @@ function setupGraph() {
     const zoom = d3.zoom()
         .scaleExtent([0.5, 3])
         .on('zoom', function(event) {
-            g.attr('transform', event.transform);
+            g.transition().duration(50).attr('transform', event.transform);
         });
-    
+
     svg.call(zoom);
+    // Enable smooth wheel zooming
+    svg.on('wheel.zoom', null); // Remove default
+    svg.node().addEventListener('wheel', function(e) {
+        e.preventDefault();
+        zoom.scaleBy(svg.transition().duration(100), e.deltaY > 0 ? 0.95 : 1.05);
+    }, { passive: false });
 }
 
 /**
@@ -216,7 +238,7 @@ function populateCityDropdowns() {
     capitalCities.forEach(city => {
         const startOption = document.createElement('option');
         startOption.value = city.id;
-        startOption.textContent = `${city.id} (Capital)`;
+        startOption.textContent = city.id; // Only show city name
         startCitySelect.appendChild(startOption);
     });
     
