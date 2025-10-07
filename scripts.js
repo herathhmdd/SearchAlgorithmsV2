@@ -312,6 +312,9 @@ async function startSearch() {
             result = await runAlgo(algorithm, startCity, destCity, depthLimit);
         }
         displaySearchResults(result, algorithm);
+        
+        // Render search tree for selected cities
+        renderSelectedSearchTree(startCity, destCity, secondDecCity);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
@@ -531,6 +534,9 @@ async function startSearch() {
             result = await runAlgo(algorithm, startCity, destCity, depthLimit);
         }
         displaySearchResults(result, algorithm);
+        
+        // Render search tree for selected cities
+        renderSelectedSearchTree(startCity, destCity, secondDecCity);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
@@ -1407,6 +1413,67 @@ function calculatePathCost(path) {
     }
     
     return totalCost;
+}
+
+// Render a simple search tree for selected cities
+function renderSelectedSearchTree(startCity, decCity, secondDecCity) {
+    const container = document.getElementById('selectedStateSpaceGraph');
+    container.innerHTML = '';
+    if (!startCity || !decCity) {
+        container.innerHTML = '<span class="text-gray-400">Select cities and click "Start Search" to view the search tree here.</span>';
+        return;
+    }
+    // Create SVG
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+    // Simple tree: root (start), two children (dec, secondDec if present)
+    const rootX = width / 2;
+    const rootY = 80;
+    const childY = height / 2 + 40;
+    let children = [decCity];
+    if (secondDecCity) children.push(secondDecCity);
+    // Draw root node
+    svg.append('circle')
+        .attr('cx', rootX)
+        .attr('cy', rootY)
+        .attr('r', 30)
+        .attr('fill', '#3b82f6');
+    svg.append('text')
+        .attr('x', rootX)
+        .attr('y', rootY + 5)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 18)
+        .attr('fill', '#fff')
+        .text(startCity);
+    // Draw child nodes and lines
+    children.forEach((city, i) => {
+        const childX = width / (children.length + 1) * (i + 1);
+        // Line
+        svg.append('line')
+            .attr('x1', rootX)
+            .attr('y1', rootY + 30)
+            .attr('x2', childX)
+            .attr('y2', childY - 30)
+            .attr('stroke', '#888')
+            .attr('stroke-width', 4);
+        // Node
+        svg.append('circle')
+            .attr('cx', childX)
+            .attr('cy', childY)
+            .attr('r', 30)
+            .attr('fill', '#22c55e');
+        svg.append('text')
+            .attr('x', childX)
+            .attr('y', childY + 5)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', 18)
+            .attr('fill', '#fff')
+            .text(city);
+    });
 }
 
 // Handle window resize for responsive visualization
