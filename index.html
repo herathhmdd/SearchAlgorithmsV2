@@ -85,9 +85,16 @@
                 <!-- Show/Hide Results Panel Button -->
                 <div >
                     <button id="toggleResultsPanel"
-                        class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded transition duration-200"
+                        class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded transition duration-200 mr-2"
                         type="button">
                         Show/Hide Results Panel
+                    </button>
+                </div>
+                <div>
+                     <button id="resetBtn"
+                        class="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition duration-200"
+                        type="button">
+                        Reset
                     </button>
                 </div>
             </div>
@@ -160,7 +167,7 @@
     <!-- Graph Visualization -->
     <div class="bg-white shadow-lg mt-4 p-6">
         <div class="max-w-7xl mx-auto">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">DEC: Western Province State Space</h2>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">DEC : Western Province</h2>
             <div id="graphContainer"
                 class="w-full h-[500px] lg:h-[800px] xl:h-[900px] border border-gray-300 rounded-lg overflow-hidden">
                 <!-- D3.js visualization will be rendered here -->
@@ -168,30 +175,10 @@
         </div>
     </div>
 
-    <!-- Control Buttons -->
-    <div class="bg-white shadow-lg mt-4 p-6">
-        <div class="max-w-7xl mx-auto text-center">
-            <div class="space-x-4">
-                <button id="pauseBtn"
-                    class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-md transition duration-200 hidden">
-                    Pause
-                </button>
-                <button id="resumeBtn"
-                    class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-md transition duration-200 hidden">
-                    Resume
-                </button>
-                <button id="resetBtn"
-                    class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-md transition duration-200">
-                    Reset
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- Fourth Panel: State Space Graph for Selected Cities -->
     <div class="bg-white shadow-lg mt-4 p-6" id="selectedStateSpacePanel">
         <div class="max-w-7xl mx-auto">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">State Space for Selected Cities</h2>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4"> Search Tree Representation of The State Space <h2>
             <div id="selectedStateSpaceGraph" class="w-full h-[400px] border border-gray-300 rounded-lg overflow-hidden flex items-center justify-center text-gray-400">
                 <span>Select cities and click "Start Search" to view the state space graph here.</span>
             </div>

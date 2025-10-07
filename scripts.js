@@ -74,9 +74,15 @@ function setupEventListeners() {
     document.getElementById('startSearch').addEventListener('click', startSearch);
     
     // Control buttons
-    document.getElementById('pauseBtn').addEventListener('click', pauseSearch);
-    document.getElementById('resumeBtn').addEventListener('click', resumeSearch);
-    document.getElementById('resetBtn').addEventListener('click', resetVisualization);
+    if (document.getElementById('pauseBtn')) {
+        document.getElementById('pauseBtn').addEventListener('click', pauseSearch);
+    }
+    if (document.getElementById('resumeBtn')) {
+        document.getElementById('resumeBtn').addEventListener('click', resumeSearch);
+    }
+    if (document.getElementById('resetBtn')) {
+        document.getElementById('resetBtn').addEventListener('click', resetAll);
+    }
     
     // Hide/Show Results Panel
     const toggleBtn = document.getElementById('toggleResultsPanel');
@@ -296,13 +302,13 @@ async function startSearch() {
     isPaused = false;
     
     // Update UI
-    document.getElementById('startSearch').disabled = true;
-    document.getElementById('pauseBtn').classList.remove('hidden');
-    document.getElementById('resetBtn').textContent = 'Stop';
-    
+    if (document.getElementById('startSearch')) document.getElementById('startSearch').disabled = true;
+    if (document.getElementById('pauseBtn')) document.getElementById('pauseBtn').classList.remove('hidden');
+    if (document.getElementById('resetBtn')) document.getElementById('resetBtn').textContent = 'Stop';
+
     // Show loading
     showLoading('Initializing search...');
-    document.getElementById('searchResultsSecond').classList.add('hidden');
+    if (document.getElementById('searchResultsSecond')) document.getElementById('searchResultsSecond').classList.add('hidden');
     try {
         const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
         let result;
@@ -314,7 +320,7 @@ async function startSearch() {
         displaySearchResults(result, algorithm);
         
         // Render search tree for selected cities
-        renderSelectedSearchTree(startCity, destCity, secondDecCity);
+        // renderSelectedSearchTree(startCity, destCity, secondDecCity);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
@@ -518,13 +524,13 @@ async function startSearch() {
     isPaused = false;
     
     // Update UI
-    document.getElementById('startSearch').disabled = true;
-    document.getElementById('pauseBtn').classList.remove('hidden');
-    document.getElementById('resetBtn').textContent = 'Stop';
+    if (document.getElementById('startSearch')) document.getElementById('startSearch').disabled = true;
+    if (document.getElementById('pauseBtn')) document.getElementById('pauseBtn').classList.remove('hidden');
+    if (document.getElementById('resetBtn')) document.getElementById('resetBtn').textContent = 'Stop';
     
     // Show loading
     showLoading('Initializing search...');
-    document.getElementById('searchResultsSecond').classList.add('hidden');
+    if (document.getElementById('searchResultsSecond')) document.getElementById('searchResultsSecond').classList.add('hidden');
     try {
         const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
         let result;
@@ -536,7 +542,7 @@ async function startSearch() {
         displaySearchResults(result, algorithm);
         
         // Render search tree for selected cities
-        renderSelectedSearchTree(startCity, destCity, secondDecCity);
+        // renderSelectedSearchTree(startCity, destCity, secondDecCity);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
@@ -723,26 +729,58 @@ function resetVisualization() {
     // Reset search state
     isSearchRunning = false;
     isPaused = false;
-    
-    // Reset all nodes and links
-    d3.selectAll('.node')
-        .classed('exploring path start goal', false);
-    
-    d3.selectAll('.link')
-        .classed('exploring path', false);
-    
+
+    // Reset all nodes and links (only if graph exists)
+    if (d3.selectAll('.node').size() > 0) {
+        d3.selectAll('.node')
+            .classed('exploring path start goal', false);
+    }
+    if (d3.selectAll('.link').size() > 0) {
+        d3.selectAll('.link')
+            .classed('exploring path', false);
+    }
+
     // Clear results
-    document.getElementById('searchResults').innerHTML = 
-        '<p class="text-gray-600">Select cities and click "Start Search" to begin.</p>';
-    
+    if (document.getElementById('searchResults')) {
+        document.getElementById('searchResults').innerHTML = 
+            '<p class="text-gray-600">Select cities and click "Start Search" to begin.</p>';
+    }
+
     // Hide complexity info
-    document.getElementById('complexityInfo').classList.add('hidden');
-    
+    if (document.getElementById('complexityInfo')) {
+        document.getElementById('complexityInfo').classList.add('hidden');
+    }
+
     // Reset UI buttons
-    document.getElementById('startSearch').disabled = false;
-    document.getElementById('pauseBtn').classList.add('hidden');
-    document.getElementById('resumeBtn').classList.add('hidden');
-    document.getElementById('resetBtn').textContent = 'Reset';
+    if (document.getElementById('startSearch')) {
+        document.getElementById('startSearch').disabled = false;
+    }
+    if (document.getElementById('pauseBtn')) {
+        document.getElementById('pauseBtn').classList.add('hidden');
+    }
+    if (document.getElementById('resumeBtn')) {
+        document.getElementById('resumeBtn').classList.add('hidden');
+    }
+    if (document.getElementById('resetBtn')) {
+        document.getElementById('resetBtn').textContent = 'Reset';
+    }
+}
+
+/**
+ * Reset function for dropdowns, highlights, and tree
+ */
+function resetAll() {
+    // Reset dropdowns
+    document.getElementById('startCity').selectedIndex = 0;
+    document.getElementById('destCity').selectedIndex = 0;
+    if (document.getElementById('secondDecCity')) {
+        document.getElementById('secondDecCity').selectedIndex = 0;
+    }
+    // Reset third panel highlights (remove all highlights)
+    d3.selectAll('#graphContainer .graph-svg circle').attr('stroke', null).attr('stroke-width', null);
+    d3.selectAll('#graphContainer .graph-svg path').attr('stroke', null).attr('stroke-width', null);
+    // Reset tree in fourth panel
+    setupPreSearchGoalTree();
 }
 
 /**
@@ -1475,6 +1513,106 @@ function renderSelectedSearchTree(startCity, decCity, secondDecCity) {
             .text(city);
     });
 }
+
+// Render a goal-aware search tree (BFS) from selected root to selected goals
+function renderGoalSearchTree(rootCity, goal1, goal2) {
+    const container = document.getElementById('selectedStateSpaceGraph');
+    container.innerHTML = '';
+    if (!rootCity || !goal1) {
+        container.innerHTML = '<span class="text-gray-400">Select start and goal cities to view the search tree here.</span>';
+        return;
+    }
+    // Build tree using BFS, stop at goals
+    const links = graphData.links;
+    const visited = new Set();
+    const tree = { name: rootCity, children: [] };
+    const nodeMap = { [rootCity]: tree };
+    const queue = [rootCity];
+    visited.add(rootCity);
+    while (queue.length) {
+        const current = queue.shift();
+        const currentNode = nodeMap[current];
+        // If current is a goal, do not expand further
+        if (current === goal1 || (goal2 && current === goal2)) continue;
+        // Find all neighbors
+        const neighbors = links.filter(l => l.source === current).map(l => l.target).filter(n => !visited.has(n));
+        neighbors.forEach(n => {
+            const child = { name: n, children: [] };
+            currentNode.children.push(child);
+            nodeMap[n] = child;
+            visited.add(n);
+            queue.push(n);
+        });
+    }
+    // Render tree with d3.tree
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+    const g = svg.append('g').attr('transform', `translate(40,40)`);
+    const root = d3.hierarchy(tree);
+    const treeLayout = d3.tree().size([width - 80, height - 80]);
+    treeLayout(root);
+    // Draw links
+    g.selectAll('.link')
+        .data(root.links())
+        .enter()
+        .append('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkVertical()
+            .x(d => d.x)
+            .y(d => d.y))
+        .attr('fill', 'none')
+        .attr('stroke', '#888')
+        .attr('stroke-width', 2);
+    // Draw nodes
+    const node = g.selectAll('.node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+    node.append('circle')
+        .attr('r', 35) // Larger circle
+        .attr('fill', d => {
+            if (d.data.name === rootCity) return '#3b82f6';
+            if (d.data.name === goal1 || (goal2 && d.data.name === goal2)) return '#ef4444';
+            return '#22c55e';
+        });
+    node.append('foreignObject')
+        .attr('x', -40)
+        .attr('y', -28)
+        .attr('width', 80)
+        .attr('height', 56)
+        .append('xhtml:div')
+        .style('display', 'flex')
+        .style('align-items', 'center')
+        .style('justify-content', 'center')
+        .style('height', '56px')
+        .style('width', '80px')
+        .style('color', '#fff')
+        .style('font-size', '10px')
+        .style('text-align', 'center')
+        .style('word-break', 'break-word')
+        .text(d => d.data.name);
+}
+
+// Show tree before search animation
+function setupPreSearchGoalTree() {
+    const startCity = document.getElementById('startCity').value;
+    const goal1 = document.getElementById('destCity').value;
+    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
+    renderGoalSearchTree(startCity, goal1, goal2);
+}
+
+document.getElementById('startCity').addEventListener('change', setupPreSearchGoalTree);
+document.getElementById('destCity').addEventListener('change', setupPreSearchGoalTree);
+if (document.getElementById('secondDecCity')) {
+    document.getElementById('secondDecCity').addEventListener('change', setupPreSearchGoalTree);
+}
+window.addEventListener('DOMContentLoaded', setupPreSearchGoalTree);
 
 // Handle window resize for responsive visualization
 window.addEventListener('resize', function() {

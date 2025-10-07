@@ -14,30 +14,26 @@
   ],
   "links": [
     
-    { "source": "Colombo", "target": "Gampaha", "distance": 27 }, { "source": "Colombo", "target": "Kalutara", "distance": 40 },  
-    { "source": "Gampaha", "target": "Colombo", "distance": 27 }, { "source": "Gampaha", "target": "Kalutara", "distance": 70 },
-    { "source": "Kalutara", "target": "Colombo", "distance": 40 },{ "source": "Kalutara", "target": "Gampaha", "distance": 70 },
-
 
     { "source": "Colombo", "target": "Rathmalana", "distance": 15 },{ "source": "Rathmalana", "target": "Colombo", "distance": 15 },
     { "source": "Colombo", "target": "Narahenpita", "distance": 6 }, { "source": "Narahenpita", "target": "Colombo", "distance": 6 },
-    { "source": "Colombo", "target": "Piliyandala", "distance": 18 },{ "source": "Piliyandala", "target": "Colombo", "distance": 18 },
     { "source": "Colombo", "target": "Welisara", "distance": 17 },{ "source": "Welisara", "target": "Colombo", "distance": 17 },
-    { "source": "Colombo", "target": "Meegoda", "distance": 30 },{ "source": "Meegoda", "target": "Colombo", "distance": 30 },
 
     {"source": "Gampaha", "target": "Meegoda", "distance": 26},{"source": "Meegoda", "target": "Gampaha", "distance": 26},
     {"source": "Gampaha", "target": "Narahenpita", "distance": 25},{"source": "Narahenpita", "target": "Gampaha", "distance": 25},
     {"source": "Gampaha", "target": "Piliyandala", "distance": 34},{"source": "Piliyandala", "target": "Gampaha", "distance": 34},
-    {"source": "Gampaha", "target": "Rathmalana", "distance": 32},{"source": "Rathmalana", "target": "Gampaha", "distance": 32},
     {"source": "Gampaha", "target": "Veyangoda", "distance": 10},{"source": "Veyangoda", "target": "Gampaha", "distance": 10},
     {"source": "Gampaha", "target": "Welisara", "distance": 12},{"source": "Welisara", "target": "Gampaha", "distance": 12},
 
     {"source": "Kalutara", "target": "Meegoda", "distance": 30},{"source": "Meegoda", "target": "Kalutara", "distance": 30},
-    {"source": "Kalutara", "target": "Narahenpita", "distance": 35},{"source": "Narahenpita", "target": "Kalutara", "distance": 35},
     {"source": "Kalutara", "target": "Piliyandala", "distance": 23},{"source": "Piliyandala", "target": "Kalutara", "distance": 23},
     {"source": "Kalutara", "target": "Rathmalana", "distance": 27},{"source": "Rathmalana", "target": "Kalutara", "distance": 27},
-    {"source": "Kalutara", "target": "Veyangoda", "distance": 90},{"source": "Veyangoda", "target": "Kalutara", "distance": 90},
-    {"source": "Kalutara", "target": "Welisara", "distance": 48},{"source": "Welisara", "target": "Kalutara", "distance": 48}
+
+    {"source": "Narahenpita", "target": "Welisara", "distance": 20},{"source": "Welisara", "target": "Narahenpita", "distance": 20},
+    {"source": "Narahenpita", "target": "Rathmalana", "distance": 11},{"source": "Rathmalana", "target": "Narahenpita", "distance": 11},
+    {"source": "Narahenpita", "target": "Piliyandala", "distance": 15},{"source": "Piliyandala", "target": "Narahenpita", "distance": 15},
+    {"source": "Rathmalana", "target": "Piliyandala", "distance": 8},{"source": "Piliyandala", "target": "Rathmalana", "distance": 8},
+    {"source": "Meegoda", "target": "Piliyandala", "distance": 20},{"source": "Piliyandala", "target": "Meegoda", "distance": 20}
 
   ]
 }
