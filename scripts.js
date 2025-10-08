@@ -1453,98 +1453,53 @@ function calculatePathCost(path) {
     return totalCost;
 }
 
-// Render a simple search tree for selected cities
-function renderSelectedSearchTree(startCity, decCity, secondDecCity) {
-    const container = document.getElementById('selectedStateSpaceGraph');
-    container.innerHTML = '';
-    if (!startCity || !decCity) {
-        container.innerHTML = '<span class="text-gray-400">Select cities and click "Start Search" to view the search tree here.</span>';
-        return;
+// --- Clean Tree Search Visualization for Fourth Panel (No Loops) ---
+function buildAlgorithmTreeNoLoops(node, path, goalSet, getNeighbors, algorithm) {
+    // If node is a goal, mark it
+    const isGoal = goalSet.has(node);
+    // If node is in path (cycle), do not expand further
+    if (path.includes(node)) {
+        return null;
     }
-    // Create SVG
-    const width = container.offsetWidth;
-    const height = container.offsetHeight;
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height);
-    // Simple tree: root (start), two children (dec, secondDec if present)
-    const rootX = width / 2;
-    const rootY = 80;
-    const childY = height / 2 + 40;
-    let children = [decCity];
-    if (secondDecCity) children.push(secondDecCity);
-    // Draw root node
-    svg.append('circle')
-        .attr('cx', rootX)
-        .attr('cy', rootY)
-        .attr('r', 30)
-        .attr('fill', '#3b82f6');
-    svg.append('text')
-        .attr('x', rootX)
-        .attr('y', rootY + 5)
-        .attr('text-anchor', 'middle')
-        .attr('font-size', 18)
-        .attr('fill', '#fff')
-        .text(startCity);
-    // Draw child nodes and lines
-    children.forEach((city, i) => {
-        const childX = width / (children.length + 1) * (i + 1);
-        // Line
-        svg.append('line')
-            .attr('x1', rootX)
-            .attr('y1', rootY + 30)
-            .attr('x2', childX)
-            .attr('y2', childY - 30)
-            .attr('stroke', '#888')
-            .attr('stroke-width', 4);
-        // Node
-        svg.append('circle')
-            .attr('cx', childX)
-            .attr('cy', childY)
-            .attr('r', 30)
-            .attr('fill', '#22c55e');
-        svg.append('text')
-            .attr('x', childX)
-            .attr('y', childY + 5)
-            .attr('text-anchor', 'middle')
-            .attr('font-size', 18)
-            .attr('fill', '#fff')
-            .text(city);
-    });
+    // Get all direct neighbors
+    let neighbors = getNeighbors(node).map(n => n.id);
+    // Order neighbors as per algorithm
+    if (algorithm === 'ucs') {
+        neighbors = getNeighbors(node).sort((a, b) => a.distance - b.distance).map(n => n.id);
+    } else if (algorithm === 'greedy' || algorithm === 'astar') {
+        // Use straight-line distance to first goal
+        const goal = Array.from(goalSet)[0];
+        neighbors = getNeighbors(node).sort((a, b) =>
+            calculateStraightLineDistance(a.id, goal) - calculateStraightLineDistance(b.id, goal)
+        ).map(n => n.id);
+    }
+    if (algorithm === 'dfs') {
+        neighbors = neighbors.slice().reverse();
+    }
+    // Recursively build children, filter out nulls
+    const children = neighbors.map(child => buildAlgorithmTreeNoLoops(child, [...path, node], goalSet, getNeighbors, algorithm)).filter(Boolean);
+    return {
+        name: node,
+        isGoal,
+        children
+    };
 }
 
-// Render a goal-aware search tree (BFS) from selected root to selected goals
-function renderGoalSearchTree(rootCity, goal1, goal2) {
+function renderAlgorithmTreePanelNoLoops() {
+    const algorithm = document.getElementById('algorithm').value;
+    const startCity = document.getElementById('startCity').value;
+    const goal1 = document.getElementById('destCity').value;
+    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
     const container = document.getElementById('selectedStateSpaceGraph');
     container.innerHTML = '';
-    if (!rootCity || !goal1) {
-        container.innerHTML = '<span class="text-gray-400">Select start and goal cities to view the search tree here.</span>';
+    if (!algorithm || !startCity || goalSet.size === 0) {
+        container.innerHTML = '<span class="text-gray-400">Select algorithm, start, and goal cities to view the tree search here.</span>';
         return;
     }
-    // Build tree using BFS, stop at goals
-    const links = graphData.links;
-    const visited = new Set();
-    const tree = { name: rootCity, children: [] };
-    const nodeMap = { [rootCity]: tree };
-    const queue = [rootCity];
-    visited.add(rootCity);
-    while (queue.length) {
-        const current = queue.shift();
-        const currentNode = nodeMap[current];
-        // If current is a goal, do not expand further
-        if (current === goal1 || (goal2 && current === goal2)) continue;
-        // Find all neighbors
-        const neighbors = links.filter(l => l.source === current).map(l => l.target).filter(n => !visited.has(n));
-        neighbors.forEach(n => {
-            const child = { name: n, children: [] };
-            currentNode.children.push(child);
-            nodeMap[n] = child;
-            visited.add(n);
-            queue.push(n);
-        });
-    }
-    // Render tree with d3.tree
+    // Build tree
+    const tree = buildAlgorithmTreeNoLoops(startCity, [], goalSet, getNeighbors, algorithm);
+    // D3 rendering
     const width = container.offsetWidth;
     const height = container.offsetHeight;
     const svg = d3.select(container)
@@ -1575,23 +1530,23 @@ function renderGoalSearchTree(rootCity, goal1, goal2) {
         .attr('class', 'node')
         .attr('transform', d => `translate(${d.x},${d.y})`);
     node.append('circle')
-        .attr('r', 35) // Larger circle
+        .attr('r', 35)
         .attr('fill', d => {
-            if (d.data.name === rootCity) return '#3b82f6';
-            if (d.data.name === goal1 || (goal2 && d.data.name === goal2)) return '#ef4444';
+            if (d.data.isGoal) return '#ef4444';
+            if (d.depth === 0) return '#3b82f6';
             return '#22c55e';
         });
     node.append('foreignObject')
-        .attr('x', -40)
-        .attr('y', -28)
-        .attr('width', 80)
-        .attr('height', 56)
+        .attr('x', -32)
+        .attr('y', -22)
+        .attr('width', 64)
+        .attr('height', 44)
         .append('xhtml:div')
         .style('display', 'flex')
         .style('align-items', 'center')
         .style('justify-content', 'center')
-        .style('height', '56px')
-        .style('width', '80px')
+        .style('height', '44px')
+        .style('width', '64px')
         .style('color', '#fff')
         .style('font-size', '10px')
         .style('text-align', 'center')
@@ -1599,20 +1554,132 @@ function renderGoalSearchTree(rootCity, goal1, goal2) {
         .text(d => d.data.name);
 }
 
-// Show tree before search animation
-function setupPreSearchGoalTree() {
+// document.getElementById('algorithm').addEventListener('change', renderAlgorithmTreePanelNoLoops);
+// document.getElementById('startCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
+// document.getElementById('destCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
+// if (document.getElementById('secondDecCity')) {
+//     document.getElementById('secondDecCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
+// }
+// window.addEventListener('DOMContentLoaded', renderAlgorithmTreePanelNoLoops);
+
+// --- Tree Search Visualization for Fourth Panel (No Loops, Stop at Goals, Two Levels Below Goals) ---
+function buildAlgorithmTreeLimited(node, path, goalSet, getNeighbors, algorithm, goalDepth = null) {
+    // If node is a goal, mark it and allow up to two more levels below
+    const isGoal = goalSet.has(node);
+    let currentGoalDepth = goalDepth;
+    if (isGoal) currentGoalDepth = 2;
+    // If node is in path (cycle), do not expand further
+    if (path.includes(node)) {
+        return null;
+    }
+    // If we are below a goal and reached the limit, stop
+    if (currentGoalDepth !== null && currentGoalDepth <= 0) {
+        return {
+            name: node,
+            isGoal,
+            children: []
+        };
+    }
+    // Get all direct neighbors
+    let neighbors = getNeighbors(node).map(n => n.id);
+    // Order neighbors as per algorithm
+    if (algorithm === 'ucs') {
+        neighbors = getNeighbors(node).sort((a, b) => a.distance - b.distance).map(n => n.id);
+    } else if (algorithm === 'greedy' || algorithm === 'astar') {
+        // Use straight-line distance to first goal
+        const goal = Array.from(goalSet)[0];
+        neighbors = getNeighbors(node).sort((a, b) =>
+            calculateStraightLineDistance(a.id, goal) - calculateStraightLineDistance(b.id, goal)
+        ).map(n => n.id);
+    }
+    if (algorithm === 'dfs') {
+        neighbors = neighbors.slice().reverse();
+    }
+    // Recursively build children, filter out nulls
+    const children = neighbors.map(child => buildAlgorithmTreeLimited(child, [...path, node], goalSet, getNeighbors, algorithm, currentGoalDepth !== null ? currentGoalDepth - 1 : null)).filter(Boolean);
+    return {
+        name: node,
+        isGoal,
+        children
+    };
+}
+
+function renderAlgorithmTreePanelLimited() {
+    const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
     const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
-    renderGoalSearchTree(startCity, goal1, goal2);
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
+    const container = document.getElementById('selectedStateSpaceGraph');
+    container.innerHTML = '';
+    if (!algorithm || !startCity || goalSet.size === 0) {
+        container.innerHTML = '<span class="text-gray-400">Select algorithm, start, and goal cities to view the tree search here.</span>';
+        return;
+    }
+    // Build tree
+    const tree = buildAlgorithmTreeLimited(startCity, [], goalSet, getNeighbors, algorithm);
+    // D3 rendering
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+    const g = svg.append('g').attr('transform', `translate(40,40)`);
+    const root = d3.hierarchy(tree);
+    const treeLayout = d3.tree().size([width - 80, height - 80]);
+    treeLayout(root);
+    // Draw links
+    g.selectAll('.link')
+        .data(root.links())
+        .enter()
+        .append('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkVertical()
+            .x(d => d.x)
+            .y(d => d.y))
+        .attr('fill', 'none')
+        .attr('stroke', '#888')
+        .attr('stroke-width', 2);
+    // Draw nodes
+    const node = g.selectAll('.node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+    node.append('circle')
+        .attr('r', 35)
+        .attr('fill', d => {
+            if (d.data.isGoal) return '#ef4444';
+            if (d.depth === 0) return '#3b82f6';
+            return '#22c55e';
+        });
+    node.append('foreignObject')
+        .attr('x', -32)
+        .attr('y', -22)
+        .attr('width', 64)
+        .attr('height', 44)
+        .append('xhtml:div')
+        .style('display', 'flex')
+        .style('align-items', 'center')
+        .style('justify-content', 'center')
+        .style('height', '44px')
+        .style('width', '64px')
+        .style('color', '#fff')
+        .style('font-size', '10px')
+        .style('text-align', 'center')
+        .style('word-break', 'break-word')
+        .text(d => d.data.name);
 }
 
-document.getElementById('startCity').addEventListener('change', setupPreSearchGoalTree);
-document.getElementById('destCity').addEventListener('change', setupPreSearchGoalTree);
-if (document.getElementById('secondDecCity')) {
-    document.getElementById('secondDecCity').addEventListener('change', setupPreSearchGoalTree);
-}
-window.addEventListener('DOMContentLoaded', setupPreSearchGoalTree);
+// document.getElementById('algorithm').addEventListener('change', renderAlgorithmTreePanelLimited);
+// document.getElementById('startCity').addEventListener('change', renderAlgorithmTreePanelLimited);
+// document.getElementById('destCity').addEventListener('change', renderAlgorithmTreePanelLimited);
+// if (document.getElementById('secondDecCity')) {
+//     document.getElementById('secondDecCity').addEventListener('change', renderAlgorithmTreePanelLimited);
+// }
+// window.addEventListener('DOMContentLoaded', renderAlgorithmTreePanelLimited);
 
 // Handle window resize for responsive visualization
 window.addEventListener('resize', function() {
@@ -1656,3 +1723,121 @@ window.addEventListener('resize', function() {
             .attr('y', d => (yScale(getNodeById(d.source).lat) + yScale(getNodeById(d.target).lat)) / 2);
     }
 });
+
+// --- Tree Search Graph Visualization (root to goal nodes only) ---
+function buildTreeSearchGraphData(root, goalSet, getNeighbors) {
+    // Build tree level by level, adding only immediate children to already rendered nodes
+    const tree = { name: root, isGoal: goalSet.has(root), children: [] };
+    let foundGoals = new Set();
+    let queue = [{ node: tree, path: [root] }];
+    let nodeMap = new Map();
+    nodeMap.set(root, tree);
+    
+    while (queue.length > 0 && foundGoals.size < goalSet.size) {
+        const { node: currentTreeNode, path } = queue.shift();
+        
+        // Check if current node is a goal
+        if (goalSet.has(currentTreeNode.name)) {
+            foundGoals.add(currentTreeNode.name);
+        }
+        
+        // If all goals found, stop adding new nodes
+        if (foundGoals.size === goalSet.size) {
+            break;
+        }
+        
+        // Add immediate children to current node
+        const neighbors = getNeighbors(currentTreeNode.name).map(n => n.id);
+        for (const neighborId of neighbors) {
+            if (!path.includes(neighborId)) { // prevent cycles
+                const newPath = [...path, neighborId];
+                let childNode = currentTreeNode.children.find(c => c.name === neighborId);
+                if (!childNode) {
+                    childNode = { name: neighborId, isGoal: goalSet.has(neighborId), children: [] };
+                    currentTreeNode.children.push(childNode);
+                    nodeMap.set(neighborId, childNode);
+                    queue.push({ node: childNode, path: newPath });
+                }
+            }
+        }
+    }
+    
+    return tree;
+}
+
+function renderTreeSearchGraph() {
+    const algorithm = document.getElementById('algorithm').value;
+    const startCity = document.getElementById('startCity').value;
+    const goal1 = document.getElementById('destCity').value;
+    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
+    const container = document.getElementById('treeSearchGraph');
+    container.innerHTML = '';
+    if (!startCity || goalSet.size === 0) {
+        container.innerHTML = '<span class="text-gray-400">Select cities and click "Start Search" to view the tree search graph here.</span>';
+        return;
+    }
+    // Build tree data (only root-to-goal paths)
+    const tree = buildTreeSearchGraphData(startCity, goalSet, getNeighbors);
+    // D3 rendering
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+    const g = svg.append('g').attr('transform', `translate(40,40)`);
+    const root = d3.hierarchy(tree);
+    const treeLayout = d3.tree().size([width - 80, height - 80]);
+    treeLayout(root);
+    // Draw links
+    g.selectAll('.link')
+        .data(root.links())
+        .enter()
+        .append('path')
+        .attr('class', 'link')
+        .attr('d', d3.linkVertical()
+            .x(d => d.x)
+            .y(d => d.y))
+        .attr('fill', 'none')
+        .attr('stroke', '#888')
+        .attr('stroke-width', 2);
+    // Draw nodes
+    const node = g.selectAll('.node')
+        .data(root.descendants())
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+    node.append('circle')
+        .attr('r', 35)
+        .attr('fill', d => {
+            if (d.data.isGoal) return '#ef4444';
+            if (d.depth === 0) return '#3b82f6';
+            return '#22c55e';
+        });
+    node.append('foreignObject')
+        .attr('x', -32)
+        .attr('y', -22)
+        .attr('width', 64)
+        .attr('height', 44)
+        .append('xhtml:div')
+        .style('display', 'flex')
+        .style('align-items', 'center')
+        .style('justify-content', 'center')
+        .style('height', '44px')
+        .style('width', '64px')
+        .style('color', '#fff')
+        .style('font-size', '10px')
+        .style('text-align', 'center')
+        .style('word-break', 'break-word')
+        .text(d => d.data.name);
+}
+
+document.getElementById('algorithm').addEventListener('change', renderTreeSearchGraph);
+document.getElementById('startCity').addEventListener('change', renderTreeSearchGraph);
+document.getElementById('destCity').addEventListener('change', renderTreeSearchGraph);
+if (document.getElementById('secondDecCity')) {
+    document.getElementById('secondDecCity').addEventListener('change', renderTreeSearchGraph);
+}
+window.addEventListener('DOMContentLoaded', renderTreeSearchGraph);
