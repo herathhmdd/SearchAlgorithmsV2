@@ -225,7 +225,6 @@ function getLinkByNodes(sourceId, targetId) {
 function populateCityDropdowns() {
     const startCitySelect = document.getElementById('startCity');
     const destCitySelect = document.getElementById('destCity');
-    const secondDecCitySelect = document.getElementById('secondDecCity');
     
     // Sort cities alphabetically
     const sortedCities = [...graphData.nodes].sort((a, b) => a.id.localeCompare(b.id));
@@ -257,20 +256,12 @@ function populateCityDropdowns() {
     });
     
     // Populate secondary DEC dropdown
-    if (secondDecCitySelect) {
-        secondDecCitySelect.innerHTML = '<option value="">(Optional)</option>';
-        decCities.forEach(city => {
-            const secondOption = document.createElement('option');
-            secondOption.value = city.id;
-            secondOption.textContent = `${city.id} (DEC)`;
-            secondDecCitySelect.appendChild(secondOption);
-        });
-    }
+    // No secondary DEC dropdown
     
     // Set default values for demonstration
     startCitySelect.value = 'Colombo';
     destCitySelect.value = 'Meegoda';
-    if (secondDecCitySelect) secondDecCitySelect.value = '';
+    
 }
 
 /**
@@ -281,207 +272,49 @@ async function startSearch() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const destCity = document.getElementById('destCity').value;
-    const secondDecCity = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
     
     // Validation
     if (!startCity || !destCity) {
         showError('Please select both start and destination cities.');
         return;
     }
-    
-    if (startCity === destCity || (secondDecCity && (startCity === secondDecCity || destCity === secondDecCity))) {
+    if (startCity === destCity) {
         showError('Start and destination cities must be different.');
         return;
     }
-    
     // Reset visualization
     resetVisualization();
-    
     // Set search state
     isSearchRunning = true;
     isPaused = false;
-    
     // Update UI
     if (document.getElementById('startSearch')) document.getElementById('startSearch').disabled = true;
     if (document.getElementById('pauseBtn')) document.getElementById('pauseBtn').classList.remove('hidden');
     if (document.getElementById('resetBtn')) document.getElementById('resetBtn').textContent = 'Stop';
-
     // Show loading
     showLoading('Initializing search...');
-    if (document.getElementById('searchResultsSecond')) document.getElementById('searchResultsSecond').classList.add('hidden');
     try {
         const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
-        let result;
-        if (secondDecCity) {
-            result = await runMultiGoalSearch(algorithm, startCity, destCity, secondDecCity, depthLimit);
-        } else {
-            result = await runAlgo(algorithm, startCity, destCity, depthLimit);
-        }
+        const result = await runAlgo(algorithm, startCity, destCity, depthLimit);
         displaySearchResults(result, algorithm);
-        
-        // Render search tree for selected cities
-        // renderSelectedSearchTree(startCity, destCity, secondDecCity);
     } catch (error) {
         console.error('Search error:', error);
         showError(`Search failed: ${error.message}`);
     } finally {
         // Reset search state
         isSearchRunning = false;
-        document.getElementById('startSearch').disabled = false;
-        document.getElementById('pauseBtn').classList.add('hidden');
-        document.getElementById('resumeBtn').classList.add('hidden');
-        document.getElementById('resetBtn').textContent = 'Reset';
+        const startBtnEl = document.getElementById('startSearch');
+        if (startBtnEl) startBtnEl.disabled = false;
+        const pauseBtnEl = document.getElementById('pauseBtn');
+        if (pauseBtnEl) pauseBtnEl.classList.add('hidden');
+        const resumeBtnEl = document.getElementById('resumeBtn');
+        if (resumeBtnEl) resumeBtnEl.classList.add('hidden');
+        const resetBtnEl = document.getElementById('resetBtn');
+        if (resetBtnEl) resetBtnEl.textContent = 'Reset';
     }
 }
 
-// Multi-goal wrapper for all search algorithms
-async function runMultiGoalSearch(algorithm, startCity, goal1, goal2, depthLimit) {
-    const goals = [goal1, goal2].filter(Boolean);
-    if (goals.length < 2) {
-        // Only one goal, use normal search
-        return await runAlgo(algorithm, startCity, goal1, depthLimit);
-    }
-    switch (algorithm) {
-        case 'bfs': return await multiGoalBFS(startCity, goals);
-        case 'dfs': return await multiGoalDFS(startCity, goals);
-        case 'ucs': return await multiGoalUCS(startCity, goals);
-        case 'dls': return await multiGoalDLS(startCity, goals, depthLimit);
-        case 'iddfs': return await multiGoalIDDFS(startCity, goals);
-        case 'bidirectional': return await multiGoalBidirectional(startCity, goals);
-        case 'greedy': return await multiGoalGreedy(startCity, goals);
-        case 'astar': return await multiGoalAStar(startCity, goals);
-        default: throw new Error('Unknown algorithm selected');
-    }
-}
-// Multi-goal BFS example
-async function multiGoalBFS(start, goals) {
-    const startTime = Date.now();
-    const queue = [{ node: start, path: [start] }];
-    const visited = new Set([start]);
-    let nodesExplored = 0;
-    while (queue.length > 0) {
-        if (!isSearchRunning) break;
-        const { node: currentNode, path } = queue.shift();
-        nodesExplored++;
-        await animateNodeExploration(currentNode);
-        if (goals.includes(currentNode)) {
-            await animatePath(path);
-            const cost = calculatePathCost(path);
-            return {
-                success: true,
-                path,
-                cost,
-                nodesExplored,
-                executionTime: Date.now() - startTime,
-                foundGoal: currentNode
-            };
-        }
-        const neighbors = getNeighbors(currentNode);
-        for (const neighbor of neighbors) {
-            if (!visited.has(neighbor.id)) {
-                visited.add(neighbor.id);
-                queue.push({
-                    node: neighbor.id,
-                    path: [...path, neighbor.id]
-                });
-            }
-        }
-        await animateNodeExploration(currentNode, false);
-    }
-    return {
-        success: false,
-        nodesExplored,
-        executionTime: Date.now() - startTime,
-        reason: 'No path exists to any goal'
-    };
-}
-// Multi-goal wrappers for other algorithms (reuse single-goal logic, but check for any goal)
-async function multiGoalDFS(start, goals) {
-    const startTime = Date.now();
-    const stack = [{ node: start, path: [start] }];
-    const visited = new Set([start]);
-    let nodesExplored = 0;
-    while (stack.length > 0) {
-        if (!isSearchRunning) break;
-        const { node: currentNode, path } = stack.pop();
-        nodesExplored++;
-        await animateNodeExploration(currentNode);
-        if (goals.includes(currentNode)) {
-            await animatePath(path);
-            const cost = calculatePathCost(path);
-            return {
-                success: true,
-                path,
-                cost,
-                nodesExplored,
-                executionTime: Date.now() - startTime,
-                foundGoal: currentNode
-            };
-        }
-        const neighbors = getNeighbors(currentNode);
-        for (let i = neighbors.length - 1; i >= 0; i--) {
-            const neighbor = neighbors[i];
-            if (!visited.has(neighbor.id)) {
-                visited.add(neighbor.id);
-                stack.push({
-                    node: neighbor.id,
-                    path: [...path, neighbor.id]
-                });
-            }
-        }
-        await animateNodeExploration(currentNode, false);
-    }
-    return {
-        success: false,
-        nodesExplored,
-        executionTime: Date.now() - startTime,
-        reason: 'No path exists to any goal'
-    };
-}
-// For UCS, Greedy, A*, use a priority queue and check for any goal
-async function multiGoalUCS(start, goals) {
-    const startTime = Date.now();
-    const frontier = [{ node: start, path: [start], cost: 0 }];
-    const visited = new Set();
-    let nodesExplored = 0;
-    while (frontier.length > 0) {
-        if (!isSearchRunning) break;
-        frontier.sort((a, b) => a.cost - b.cost);
-        const { node: currentNode, path, cost } = frontier.shift();
-        if (visited.has(currentNode)) continue;
-        visited.add(currentNode);
-        nodesExplored++;
-        await animateNodeExploration(currentNode);
-        if (goals.includes(currentNode)) {
-            await animatePath(path);
-            return {
-                success: true,
-                path,
-                cost,
-                nodesExplored,
-                executionTime: Date.now() - startTime,
-                foundGoal: currentNode
-            };
-        }
-        const neighbors = getNeighbors(currentNode);
-        for (const neighbor of neighbors) {
-            if (!visited.has(neighbor.id)) {
-                frontier.push({
-                    node: neighbor.id,
-                    path: [...path, neighbor.id],
-                    cost: cost + neighbor.distance
-                });
-            }
-        }
-        await animateNodeExploration(currentNode, false);
-    }
-    return {
-        success: false,
-        nodesExplored,
-        executionTime: Date.now() - startTime,
-        reason: 'No path exists to any goal'
-    };
-}
+// Single-goal searches only; multi-goal logic removed
 // For DLS, IDDFS, Greedy, A*, similar wrappers can be made (omitted for brevity, but can be added as needed)
 // Helper to run the selected algorithm (single-goal)
 async function runAlgo(algorithm, startCity, goal, depthLimit) {
@@ -497,64 +330,7 @@ async function runAlgo(algorithm, startCity, goal, depthLimit) {
         default: throw new Error('Unknown algorithm selected');
     }
 }
-// Patch startSearch to use multi-goal logic
-async function startSearch() {
-    if (isSearchRunning) return;
-    const algorithm = document.getElementById('algorithm').value;
-    const startCity = document.getElementById('startCity').value;
-    const destCity = document.getElementById('destCity').value;
-    const secondDecCity = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
-    
-    // Validation
-    if (!startCity || !destCity) {
-        showError('Please select both start and destination cities.');
-        return;
-    }
-    
-    if (startCity === destCity || (secondDecCity && (startCity === secondDecCity || destCity === secondDecCity))) {
-        showError('Start and destination cities must be different.');
-        return;
-    }
-    
-    // Reset visualization
-    resetVisualization();
-    
-    // Set search state
-    isSearchRunning = true;
-    isPaused = false;
-    
-    // Update UI
-    if (document.getElementById('startSearch')) document.getElementById('startSearch').disabled = true;
-    if (document.getElementById('pauseBtn')) document.getElementById('pauseBtn').classList.remove('hidden');
-    if (document.getElementById('resetBtn')) document.getElementById('resetBtn').textContent = 'Stop';
-    
-    // Show loading
-    showLoading('Initializing search...');
-    if (document.getElementById('searchResultsSecond')) document.getElementById('searchResultsSecond').classList.add('hidden');
-    try {
-        const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
-        let result;
-        if (secondDecCity) {
-            result = await runMultiGoalSearch(algorithm, startCity, destCity, secondDecCity, depthLimit);
-        } else {
-            result = await runAlgo(algorithm, startCity, destCity, depthLimit);
-        }
-        displaySearchResults(result, algorithm);
-        
-        // Render search tree for selected cities
-        // renderSelectedSearchTree(startCity, destCity, secondDecCity);
-    } catch (error) {
-        console.error('Search error:', error);
-        showError(`Search failed: ${error.message}`);
-    } finally {
-        // Reset search state
-        isSearchRunning = false;
-        document.getElementById('startSearch').disabled = false;
-        document.getElementById('pauseBtn').classList.add('hidden');
-        document.getElementById('resumeBtn').classList.add('hidden');
-        document.getElementById('resetBtn').textContent = 'Reset';
-    }
-}
+// Removed duplicate startSearch patch block
 
 /**
  * Calculate straight-line distance between two cities (heuristic for informed search)
@@ -773,9 +549,6 @@ function resetAll() {
     // Reset dropdowns
     document.getElementById('startCity').selectedIndex = 0;
     document.getElementById('destCity').selectedIndex = 0;
-    if (document.getElementById('secondDecCity')) {
-        document.getElementById('secondDecCity').selectedIndex = 0;
-    }
     // Reset third panel highlights (remove all highlights)
     d3.selectAll('#graphContainer .graph-svg circle').attr('stroke', null).attr('stroke-width', null);
     d3.selectAll('#graphContainer .graph-svg path').attr('stroke', null).attr('stroke-width', null);
@@ -796,14 +569,156 @@ function displaySearchResults(result, algorithm, asString) {
         html += `<p><strong>Path Found:</strong> ${result.path.join(' → ')}</p>`;
         html += `<p><strong>Total Distance:</strong> ${result.cost} km</p>`;
         html += `<p><strong>Nodes Explored:</strong> ${result.nodesExplored}</p>`;
+        if (typeof result.nodesDiscovered === 'number') {
+            html += `<p><strong>Nodes Discovered:</strong> ${result.nodesDiscovered}</p>`;
+        }
+        if (typeof result.edgesProcessed === 'number') {
+            html += `<p><strong>Edges Processed:</strong> ${result.edgesProcessed}</p>`;
+        }
         html += `<p><strong>Path Length:</strong> ${result.path.length} cities</p>`;
         
         if (result.executionTime) {
             html += `<p><strong>Execution Time:</strong> ${result.executionTime}ms</p>`;
         }
+
+        // Show heuristic values along the path for Greedy Best-First and A*
+        if ((algorithm === 'greedy' || algorithm === 'astar') && Array.isArray(result.path) && result.path.length > 0) {
+            const goalCity = document.getElementById('destCity')?.value;
+            if (goalCity) {
+                const heuristics = result.path.map(city => {
+                    const h = calculateStraightLineDistance(city, goalCity);
+                    const hStr = Number.isFinite(h) ? h.toFixed(1) : '∞';
+                    return `${city} (h=${hStr} km)`;
+                }).join(' → ');
+                html += `<p><strong>Heuristics (to goal):</strong> ${heuristics}</p>`;
+            }
+        }
+
+        // For A*, also show a compact table of g(n), h(n), f(n) for the final path
+        if (algorithm === 'astar' && Array.isArray(result.path) && result.path.length > 0) {
+            const goalCity = document.getElementById('destCity')?.value;
+            if (goalCity) {
+                let gSoFar = 0;
+                const rows = result.path.map((city, idx) => {
+                    const h = calculateStraightLineDistance(city, goalCity);
+                    const f = gSoFar + h;
+                    const row = {
+                        city,
+                        g: Number.isFinite(gSoFar) ? gSoFar : Infinity,
+                        h: Number.isFinite(h) ? h : Infinity,
+                        f: Number.isFinite(f) ? f : Infinity
+                    };
+                    // advance g to next node for next iteration
+                    if (idx < result.path.length - 1) {
+                        const link = getLinkByNodes(result.path[idx], result.path[idx + 1]);
+                        if (link) gSoFar += link.distance;
+                    }
+                    return row;
+                });
+                const format = v => (Number.isFinite(v) ? v.toFixed(1) : '∞');
+                const table = `
+                    <div class="mt-2 overflow-auto">
+                        <table class="min-w-full text-xs border border-gray-200 rounded">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-2 py-1 text-left">Node</th>
+                                    <th class="px-2 py-1 text-right">g(n)</th>
+                                    <th class="px-2 py-1 text-right">h(n)</th>
+                                    <th class="px-2 py-1 text-right">f(n)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.map(r => `
+                                    <tr class="odd:bg-white even:bg-gray-50">
+                                        <td class="px-2 py-1">${r.city}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.g)}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.h)}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.f)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                html += `<div class="mt-2"><strong>A* Scores:</strong>${table}
+                    <div class="mt-1 text-xs text-gray-600">
+                        <p class="mb-1"><strong>What do g(n), h(n), f(n) mean?</strong></p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <li><strong>g(n)</strong>: Accumulated path cost from Start to n (sum of edge distances in km).</li>
+                            <li><strong>h(n)</strong>: Heuristic estimate from n to Goal (straight-line distance).</li>
+                            <li><strong>f(n)</strong> = g(n) + h(n): Estimated total cost via n. A* expands the frontier node with the smallest f(n).</li>
+                        </ul>
+                    </div>
+                </div>`;
+            }
+        }
+
+        // For Greedy, show the same g(n), h(n), f(n) table for interpretability
+        if (algorithm === 'greedy' && Array.isArray(result.path) && result.path.length > 0) {
+            const goalCity = document.getElementById('destCity')?.value;
+            if (goalCity) {
+                let gSoFar = 0;
+                const rows = result.path.map((city, idx) => {
+                    const h = calculateStraightLineDistance(city, goalCity);
+                    const f = gSoFar + h; // not used by Greedy, but informative
+                    const row = {
+                        city,
+                        g: Number.isFinite(gSoFar) ? gSoFar : Infinity,
+                        h: Number.isFinite(h) ? h : Infinity,
+                        f: Number.isFinite(f) ? f : Infinity
+                    };
+                    if (idx < result.path.length - 1) {
+                        const link = getLinkByNodes(result.path[idx], result.path[idx + 1]);
+                        if (link) gSoFar += link.distance;
+                    }
+                    return row;
+                });
+                const format = v => (Number.isFinite(v) ? v.toFixed(1) : '∞');
+                const table = `
+                    <div class="mt-2 overflow-auto">
+                        <table class="min-w-full text-xs border border-gray-200 rounded">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-2 py-1 text-left">Node</th>
+                                    <th class="px-2 py-1 text-right">g(n)</th>
+                                    <th class="px-2 py-1 text-right">h(n)</th>
+                                    <th class="px-2 py-1 text-right">f(n)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rows.map(r => `
+                                    <tr class="odd:bg-white even:bg-gray-50">
+                                        <td class="px-2 py-1">${r.city}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.g)}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.h)}</td>
+                                        <td class="px-2 py-1 text-right">${format(r.f)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                html += `<div class="mt-2"><strong>Greedy Scores:</strong>${table}
+                    <div class="mt-1 text-xs text-gray-600">
+                        <p class="mb-1"><strong>What do g(n), h(n), f(n) mean?</strong></p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            <li><strong>g(n)</strong>: Accumulated path cost from Start to n (sum of edge distances in km). Shown for context.</li>
+                            <li><strong>h(n)</strong>: Heuristic estimate from n to Goal (straight-line distance). Greedy selects the node with the smallest h(n).</li>
+                            <li><strong>f(n)</strong> = g(n) + h(n): Not used by Greedy for decisions; included to compare with A*.</li>
+                        </ul>
+                    </div>
+                </div>`;
+            }
+        }
     } else {
         html += `<p><strong>No path found</strong></p>`;
         html += `<p><strong>Nodes Explored:</strong> ${result.nodesExplored}</p>`;
+        if (typeof result.nodesDiscovered === 'number') {
+            html += `<p><strong>Nodes Discovered:</strong> ${result.nodesDiscovered}</p>`;
+        }
+        if (typeof result.edgesProcessed === 'number') {
+            html += `<p><strong>Edges Processed:</strong> ${result.edgesProcessed}</p>`;
+        }
         
         if (result.reason) {
             html += `<p><strong>Reason:</strong> ${result.reason}</p>`;
@@ -934,6 +849,8 @@ async function breadthFirstSearch(start, goal) {
     const queue = [{ node: start, path: [start] }];
     const visited = new Set([start]);
     let nodesExplored = 0;
+    let nodesDiscovered = 1; // start is discovered
+    let edgesProcessed = 0;
     
     updateStatus(`Starting BFS from ${start} to ${goal}`);
     
@@ -953,14 +870,18 @@ async function breadthFirstSearch(start, goal) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
         
         const neighbors = getNeighbors(currentNode);
         for (const neighbor of neighbors) {
+            edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 visited.add(neighbor.id);
+                nodesDiscovered++;
                 queue.push({
                     node: neighbor.id,
                     path: [...path, neighbor.id]
@@ -974,6 +895,8 @@ async function breadthFirstSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -988,6 +911,8 @@ async function depthFirstSearch(start, goal) {
     const stack = [{ node: start, path: [start] }];
     const visited = new Set([start]);
     let nodesExplored = 0;
+    let nodesDiscovered = 1;
+    let edgesProcessed = 0;
     
     updateStatus(`Starting DFS from ${start} to ${goal}`);
     
@@ -1007,6 +932,8 @@ async function depthFirstSearch(start, goal) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
@@ -1015,8 +942,10 @@ async function depthFirstSearch(start, goal) {
         // Reverse order for DFS to maintain consistent exploration
         for (let i = neighbors.length - 1; i >= 0; i--) {
             const neighbor = neighbors[i];
+            edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 visited.add(neighbor.id);
+                nodesDiscovered++;
                 stack.push({
                     node: neighbor.id,
                     path: [...path, neighbor.id]
@@ -1030,6 +959,8 @@ async function depthFirstSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -1046,6 +977,8 @@ async function uniformCostSearch(start, goal) {
     const frontier = [{ node: start, path: [start], cost: 0 }];
     const visited = new Set();
     let nodesExplored = 0;
+    let nodesDiscovered = 1; // counting start as discovered when pushing frontier
+    let edgesProcessed = 0;
     
     updateStatus(`Starting UCS from ${start} to ${goal}`);
     
@@ -1055,7 +988,7 @@ async function uniformCostSearch(start, goal) {
         // Sort frontier by cost (lowest first)
         frontier.sort((a, b) => a.cost - b.cost);
         
-        const { node: currentNode, path, cost } = frontier.shift();
+    const { node: currentNode, path, cost } = frontier.shift();
         
         if (visited.has(currentNode)) continue;
         
@@ -1071,18 +1004,22 @@ async function uniformCostSearch(start, goal) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
         
         const neighbors = getNeighbors(currentNode);
         for (const neighbor of neighbors) {
+            edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 frontier.push({
                     node: neighbor.id,
                     path: [...path, neighbor.id],
                     cost: cost + neighbor.distance
                 });
+                nodesDiscovered++;
             }
         }
         
@@ -1092,6 +1029,8 @@ async function uniformCostSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -1104,6 +1043,8 @@ async function uniformCostSearch(start, goal) {
 async function depthLimitedSearch(start, goal, depthLimit) {
     const startTime = Date.now();
     let nodesExplored = 0;
+    let edgesProcessed = 0;
+    let nodesDiscovered = 1; // start
     
     updateStatus(`Starting DLS from ${start} to ${goal} with depth limit ${depthLimit}`);
     
@@ -1121,32 +1062,45 @@ async function depthLimitedSearch(start, goal, depthLimit) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
         
         if (depth >= depthLimit) {
             await animateNodeExploration(currentNode, false);
-            return { success: false, reason: 'Depth limit reached' };
+            return { success: false, reason: 'Depth limit reached', nodesExplored, nodesDiscovered, edgesProcessed };
         }
         
         const neighbors = getNeighbors(currentNode);
         for (const neighbor of neighbors) {
+            edgesProcessed++;
             // Avoid cycles by checking if neighbor is already in path
             if (!path.includes(neighbor.id)) {
                 const result = await dls(neighbor.id, [...path, neighbor.id], depth + 1);
                 if (result.success) return result;
+                // if we expanded to neighbor (implicitly discovered), count it once
+                if (!path.includes(neighbor.id)) {
+                    nodesDiscovered++;
+                }
             }
         }
         
         await animateNodeExploration(currentNode, false);
-        return { success: false, reason: 'No path found within depth limit' };
+        return { success: false, reason: 'No path found within depth limit', nodesExplored, nodesDiscovered, edgesProcessed };
     }
     
     const result = await dls(start, [start], 0);
     if (!result.nodesExplored) {
         result.nodesExplored = nodesExplored;
         result.executionTime = Date.now() - startTime;
+    }
+    if (typeof result.nodesDiscovered !== 'number') {
+        result.nodesDiscovered = nodesDiscovered;
+    }
+    if (typeof result.edgesProcessed !== 'number') {
+        result.edgesProcessed = edgesProcessed;
     }
     
     return result;
@@ -1159,6 +1113,8 @@ async function depthLimitedSearch(start, goal, depthLimit) {
 async function iterativeDeepeningSearch(start, goal) {
     const startTime = Date.now();
     let totalNodesExplored = 0;
+    let totalEdgesProcessed = 0;
+    let totalNodesDiscovered = 0;
     const maxDepth = 5; // Reasonable maximum depth for Sri Lankan cities
     
     updateStatus(`Starting IDDFS from ${start} to ${goal}`);
@@ -1171,13 +1127,17 @@ async function iterativeDeepeningSearch(start, goal) {
         // Reset visualization for new depth iteration
         d3.selectAll('.node').classed('exploring', false);
         
-        const result = await depthLimitedSearch(start, goal, depth);
-        totalNodesExplored += result.nodesExplored;
+    const result = await depthLimitedSearch(start, goal, depth);
+    totalNodesExplored += result.nodesExplored;
+    totalEdgesProcessed += (result.edgesProcessed || 0);
+    totalNodesDiscovered += (result.nodesDiscovered || 0);
         
         if (result.success) {
             return {
                 ...result,
                 nodesExplored: totalNodesExplored,
+                nodesDiscovered: totalNodesDiscovered,
+                edgesProcessed: totalEdgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
@@ -1189,6 +1149,8 @@ async function iterativeDeepeningSearch(start, goal) {
     return {
         success: false,
         nodesExplored: totalNodesExplored,
+        nodesDiscovered: totalNodesDiscovered,
+        edgesProcessed: totalEdgesProcessed,
         executionTime: Date.now() - startTime,
         reason: `No path found within maximum depth of ${maxDepth}`
     };
@@ -1208,6 +1170,8 @@ async function bidirectionalSearch(start, goal) {
     const backVisited = new Map([[goal, [goal]]]);
     
     let nodesExplored = 0;
+    let nodesDiscovered = 2; // start and goal as seeds
+    let edgesProcessed = 0;
     
     updateStatus(`Starting Bidirectional Search from ${start} to ${goal}`);
     
@@ -1234,12 +1198,15 @@ async function bidirectionalSearch(start, goal) {
                     path: fullPath,
                     cost,
                     nodesExplored,
+                    nodesDiscovered,
+                    edgesProcessed,
                     executionTime: Date.now() - startTime
                 };
             }
             
             const neighbors = getNeighbors(currentNode);
             for (const neighbor of neighbors) {
+                edgesProcessed++;
                 if (!frontVisited.has(neighbor.id)) {
                     const newPath = [...path, neighbor.id];
                     frontVisited.set(neighbor.id, newPath);
@@ -1247,6 +1214,7 @@ async function bidirectionalSearch(start, goal) {
                         node: neighbor.id,
                         path: newPath
                     });
+                    nodesDiscovered++;
                 }
             }
             
@@ -1273,12 +1241,15 @@ async function bidirectionalSearch(start, goal) {
                     path: fullPath,
                     cost,
                     nodesExplored,
+                    nodesDiscovered,
+                    edgesProcessed,
                     executionTime: Date.now() - startTime
                 };
             }
             
             const neighbors = getNeighbors(currentNode);
             for (const neighbor of neighbors) {
+                edgesProcessed++;
                 if (!backVisited.has(neighbor.id)) {
                     const newPath = [...path, neighbor.id];
                     backVisited.set(neighbor.id, newPath);
@@ -1286,6 +1257,7 @@ async function bidirectionalSearch(start, goal) {
                         node: neighbor.id,
                         path: newPath
                     });
+                    nodesDiscovered++;
                 }
             }
             
@@ -1296,6 +1268,8 @@ async function bidirectionalSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -1311,6 +1285,8 @@ async function greedyBestFirstSearch(start, goal) {
     const frontier = [{ node: start, path: [start], heuristic: calculateStraightLineDistance(start, goal) }];
     const visited = new Set();
     let nodesExplored = 0;
+    let nodesDiscovered = 1;
+    let edgesProcessed = 0;
     
     updateStatus(`Starting Greedy Best-First Search from ${start} to ${goal}`);
     
@@ -1337,18 +1313,22 @@ async function greedyBestFirstSearch(start, goal) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
         
         const neighbors = getNeighbors(currentNode);
         for (const neighbor of neighbors) {
+            edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 frontier.push({
                     node: neighbor.id,
                     path: [...path, neighbor.id],
                     heuristic: calculateStraightLineDistance(neighbor.id, goal)
                 });
+                nodesDiscovered++;
             }
         }
         
@@ -1358,6 +1338,8 @@ async function greedyBestFirstSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -1380,6 +1362,8 @@ async function aStarSearch(start, goal) {
     
     const visited = new Set();
     let nodesExplored = 0;
+    let nodesDiscovered = 1;
+    let edgesProcessed = 0;
     
     updateStatus(`Starting A* Search from ${start} to ${goal}`);
     
@@ -1405,12 +1389,15 @@ async function aStarSearch(start, goal) {
                 path,
                 cost,
                 nodesExplored,
+                nodesDiscovered,
+                edgesProcessed,
                 executionTime: Date.now() - startTime
             };
         }
         
         const neighbors = getNeighbors(currentNode);
         for (const neighbor of neighbors) {
+            edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 const newCost = cost + neighbor.distance;
                 const heuristic = calculateStraightLineDistance(neighbor.id, goal);
@@ -1423,6 +1410,7 @@ async function aStarSearch(start, goal) {
                     heuristic,
                     f
                 });
+                nodesDiscovered++;
             }
         }
         
@@ -1432,6 +1420,8 @@ async function aStarSearch(start, goal) {
     return {
         success: false,
         nodesExplored,
+        nodesDiscovered,
+        edgesProcessed,
         executionTime: Date.now() - startTime,
         reason: 'No path exists between the cities'
     };
@@ -1489,8 +1479,7 @@ function renderAlgorithmTreePanelNoLoops() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
-    const goalSet = new Set([goal1, goal2].filter(Boolean));
+    const goalSet = new Set([goal1].filter(Boolean));
     const container = document.getElementById('selectedStateSpaceGraph');
     container.innerHTML = '';
     if (!algorithm || !startCity || goalSet.size === 0) {
@@ -1557,9 +1546,6 @@ function renderAlgorithmTreePanelNoLoops() {
 // document.getElementById('algorithm').addEventListener('change', renderAlgorithmTreePanelNoLoops);
 // document.getElementById('startCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
 // document.getElementById('destCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
-// if (document.getElementById('secondDecCity')) {
-//     document.getElementById('secondDecCity').addEventListener('change', renderAlgorithmTreePanelNoLoops);
-// }
 // window.addEventListener('DOMContentLoaded', renderAlgorithmTreePanelNoLoops);
 
 // --- Tree Search Visualization for Fourth Panel (No Loops, Stop at Goals, Two Levels Below Goals) ---
@@ -1608,8 +1594,7 @@ function renderAlgorithmTreePanelLimited() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
-    const goalSet = new Set([goal1, goal2].filter(Boolean));
+    const goalSet = new Set([goal1].filter(Boolean));
     const container = document.getElementById('selectedStateSpaceGraph');
     container.innerHTML = '';
     if (!algorithm || !startCity || goalSet.size === 0) {
@@ -1676,9 +1661,6 @@ function renderAlgorithmTreePanelLimited() {
 // document.getElementById('algorithm').addEventListener('change', renderAlgorithmTreePanelLimited);
 // document.getElementById('startCity').addEventListener('change', renderAlgorithmTreePanelLimited);
 // document.getElementById('destCity').addEventListener('change', renderAlgorithmTreePanelLimited);
-// if (document.getElementById('secondDecCity')) {
-//     document.getElementById('secondDecCity').addEventListener('change', renderAlgorithmTreePanelLimited);
-// }
 // window.addEventListener('DOMContentLoaded', renderAlgorithmTreePanelLimited);
 
 // Handle window resize for responsive visualization
@@ -1769,8 +1751,7 @@ function renderTreeSearchGraph() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goal2 = document.getElementById('secondDecCity') ? document.getElementById('secondDecCity').value : '';
-    const goalSet = new Set([goal1, goal2].filter(Boolean));
+    const goalSet = new Set([goal1].filter(Boolean));
     const container = document.getElementById('treeSearchGraph');
     container.innerHTML = '';
     if (!startCity || goalSet.size === 0) {
@@ -1837,7 +1818,5 @@ function renderTreeSearchGraph() {
 document.getElementById('algorithm').addEventListener('change', renderTreeSearchGraph);
 document.getElementById('startCity').addEventListener('change', renderTreeSearchGraph);
 document.getElementById('destCity').addEventListener('change', renderTreeSearchGraph);
-if (document.getElementById('secondDecCity')) {
-    document.getElementById('secondDecCity').addEventListener('change', renderTreeSearchGraph);
-}
+// secondary DEC removed
 window.addEventListener('DOMContentLoaded', renderTreeSearchGraph);
