@@ -269,7 +269,7 @@ function populateCityDropdowns() {
     
     // Set default values for demonstration
     startCitySelect.value = 'Colombo';
-    destCitySelect.value = 'Dambulla';
+    destCitySelect.value = 'Meegoda';
     if (secondDecCitySelect) secondDecCitySelect.value = '';
 }
 
