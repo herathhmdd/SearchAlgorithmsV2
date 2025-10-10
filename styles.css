@@ -218,3 +218,7 @@ body {
 #searchResults::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+.bg-black-500 {
+    background-color: #000000; /* Adjusted to a blue shade for better visibility */
+}
