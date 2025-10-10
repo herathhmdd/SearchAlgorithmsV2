@@ -1159,7 +1159,7 @@ async function depthLimitedSearch(start, goal, depthLimit) {
 async function iterativeDeepeningSearch(start, goal) {
     const startTime = Date.now();
     let totalNodesExplored = 0;
-    const maxDepth = 3; // Reasonable maximum depth for Sri Lankan cities
+    const maxDepth = 5; // Reasonable maximum depth for Sri Lankan cities
     
     updateStatus(`Starting IDDFS from ${start} to ${goal}`);
     
