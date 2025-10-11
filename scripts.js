@@ -759,10 +759,21 @@ function getAlgorithmName(algorithm) {
  * Get complexity information for display
  */
 function getComplexityInfo(algorithm) {
-    const complexities = {
+    const complexities_old = {
         'bfs': { time: 'O(V + E)', space: 'O(V)', optimal: 'Yes (unweighted)', complete: 'Yes' },
         'dfs': { time: 'O(V + E)', space: 'O(V)', optimal: 'No', complete: 'No (infinite spaces)' },
         'ucs': { time: 'O(b^⌈C*/ε⌉)', space: 'O(b^⌈C*/ε⌉)', optimal: 'Yes', complete: 'Yes' },
+        'dls': { time: 'O(b^l)', space: 'O(bl)', optimal: 'No', complete: 'No' },
+        'iddfs': { time: 'O(b^d)', space: 'O(bd)', optimal: 'Yes (unweighted)', complete: 'Yes' },
+        'bidirectional': { time: 'O(b^(d/2))', space: 'O(b^(d/2))', optimal: 'Yes (unweighted)', complete: 'Yes' },
+        'greedy': { time: 'O(b^m)', space: 'O(b^m)', optimal: 'No', complete: 'No' },
+        'astar': { time: 'O(b^d)', space: 'O(b^d)', optimal: 'Yes (admissible heuristic)', complete: 'Yes' }
+    };
+
+    const complexities = {
+        'bfs': { time: 'O(b^d)', space: 'O(b^(d+1))', optimal: 'Yes (unweighted)', complete: 'Yes' },
+        'dfs': { time: 'O(b^m)', space: 'O(bm)', optimal: 'No', complete: 'No (infinite spaces)' },
+        'ucs': { time: 'O(b^(1 + ⌈C*/ε⌉))', space: 'O(b^(1 + ⌈C*/ε⌉))', optimal: 'Yes', complete: 'Yes' },
         'dls': { time: 'O(b^l)', space: 'O(bl)', optimal: 'No', complete: 'No' },
         'iddfs': { time: 'O(b^d)', space: 'O(bd)', optimal: 'Yes (unweighted)', complete: 'Yes' },
         'bidirectional': { time: 'O(b^(d/2))', space: 'O(b^(d/2))', optimal: 'Yes (unweighted)', complete: 'Yes' },
