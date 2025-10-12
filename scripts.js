@@ -29,6 +29,8 @@ const NODE_RADIUS = 8;
 document.addEventListener('DOMContentLoaded', async function() {
     await initializeApp();
     setupEventListeners();
+    // Initial heuristic labels render (in case A* is preselected)
+    updateHeuristicLabelsForGraph();
 });
 
 /**
@@ -61,6 +63,7 @@ function setupEventListeners() {
     document.getElementById('algorithm').addEventListener('change', function() {
         const algorithm = this.value;
         const depthLimitContainer = document.getElementById('depthLimitContainer');
+        const secondaryGoalContainer = document.getElementById('secondaryGoalContainer');
         
         // Show depth limit input for DLS
         if (algorithm === 'dls') {
@@ -68,6 +71,18 @@ function setupEventListeners() {
         } else {
             depthLimitContainer.classList.add('hidden');
         }
+
+        // Hide secondary goal for Bidirectional
+        if (secondaryGoalContainer) {
+            if (algorithm === 'bidirectional') {
+                secondaryGoalContainer.classList.add('hidden');
+            } else {
+                secondaryGoalContainer.classList.remove('hidden');
+            }
+        }
+
+        // Update heuristic labels when algorithm changes
+        updateHeuristicLabelsForGraph();
     });
 
     // Search button
@@ -99,10 +114,18 @@ function setupEventListeners() {
             }
         });
     }
+
+    // Update heuristic labels when goals change
+    const destSel = document.getElementById('destCity');
+    if (destSel) destSel.addEventListener('change', updateHeuristicLabelsForGraph);
+    const dest2Sel = document.getElementById('secondaryDestCity');
+    if (dest2Sel) dest2Sel.addEventListener('change', updateHeuristicLabelsForGraph);
 }
 
 /**
- * Setup the D3.js graph visualization
+        if (document.getElementById('secondaryDestCity')) {
+            document.getElementById('secondaryDestCity').addEventListener('change', renderTreeSearchGraph);
+        }
  */
 function setupGraph() {
     const container = document.getElementById('graphContainer');
@@ -200,6 +223,9 @@ function setupGraph() {
         e.preventDefault();
         zoom.scaleBy(svg.transition().duration(100), e.deltaY > 0 ? 0.95 : 1.05);
     }, { passive: false });
+
+    // Initial heuristic labels after graph setup
+    updateHeuristicLabelsForGraph();
 }
 
 /**
@@ -225,6 +251,7 @@ function getLinkByNodes(sourceId, targetId) {
 function populateCityDropdowns() {
     const startCitySelect = document.getElementById('startCity');
     const destCitySelect = document.getElementById('destCity');
+    const secondaryDestCitySelect = document.getElementById('secondaryDestCity');
     
     // Sort cities alphabetically
     const sortedCities = [...graphData.nodes].sort((a, b) => a.id.localeCompare(b.id));
@@ -238,6 +265,9 @@ function populateCityDropdowns() {
     // Clear existing options
     startCitySelect.innerHTML = '<option value="">Select start city (Capital only)</option>';
     destCitySelect.innerHTML = '<option value="">Select destination city (DEC only)</option>';
+    if (secondaryDestCitySelect) {
+        secondaryDestCitySelect.innerHTML = '<option value="">Optional: Secondary DEC</option>';
+    }
     
     // Add capital cities only to start dropdown
     capitalCities.forEach(city => {
@@ -254,13 +284,22 @@ function populateCityDropdowns() {
         destOption.textContent = `${city.id} (DEC)`;
         destCitySelect.appendChild(destOption);
     });
+    // Populate secondary DEC dropdown (same options)
+    if (secondaryDestCitySelect) {
+        decCities.forEach(city => {
+            const opt = document.createElement('option');
+            opt.value = city.id;
+            opt.textContent = `${city.id} (DEC)`;
+            secondaryDestCitySelect.appendChild(opt);
+        });
+    }
     
-    // Populate secondary DEC dropdown
-    // No secondary DEC dropdown
+    // Secondary DEC dropdown populated above
     
     // Set default values for demonstration
     startCitySelect.value = 'Colombo';
     destCitySelect.value = 'Meegoda';
+    if (secondaryDestCitySelect) secondaryDestCitySelect.value = '';
     
 }
 
@@ -272,15 +311,33 @@ async function startSearch() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const destCity = document.getElementById('destCity').value;
+    const secondaryDestCity = document.getElementById('secondaryDestCity')?.value || '';
+    const goalsArray = [destCity, secondaryDestCity].filter(Boolean);
     
     // Validation
-    if (!startCity || !destCity) {
-        showError('Please select both start and destination cities.');
+    if (!startCity) {
+        showError('Please select a start city.');
         return;
     }
-    if (startCity === destCity) {
-        showError('Start and destination cities must be different.');
-        return;
+    if (algorithm === 'bidirectional') {
+        if (!destCity) {
+            showError('Please select a destination city.');
+            return;
+        }
+        if (startCity === destCity) {
+            showError('Start and destination cities must be different.');
+            return;
+        }
+    } else {
+        if (goalsArray.length === 0) {
+            showError('Please select at least one destination city.');
+            return;
+        }
+        const validGoals = goalsArray.filter(g => g !== startCity);
+        if (validGoals.length === 0) {
+            showError('At least one destination city must be different from the start city.');
+            return;
+        }
     }
     // Reset visualization
     resetVisualization();
@@ -295,7 +352,7 @@ async function startSearch() {
     showLoading('Initializing search...');
     try {
         const depthLimit = parseInt(document.getElementById('depthLimit').value) || 5;
-        const result = await runAlgo(algorithm, startCity, destCity, depthLimit);
+    const result = await runAlgo(algorithm, startCity, destCity, depthLimit, secondaryDestCity);
         displaySearchResults(result, algorithm);
     } catch (error) {
         console.error('Search error:', error);
@@ -317,16 +374,17 @@ async function startSearch() {
 // Single-goal searches only; multi-goal logic removed
 // For DLS, IDDFS, Greedy, A*, similar wrappers can be made (omitted for brevity, but can be added as needed)
 // Helper to run the selected algorithm (single-goal)
-async function runAlgo(algorithm, startCity, goal, depthLimit) {
+async function runAlgo(algorithm, startCity, goal, depthLimit, secondaryGoal = '') {
+    const goalsSet = new Set([goal, secondaryGoal].filter(Boolean));
     switch (algorithm) {
-        case 'bfs': return await breadthFirstSearch(startCity, goal);
-        case 'dfs': return await depthFirstSearch(startCity, goal);
-        case 'ucs': return await uniformCostSearch(startCity, goal);
-        case 'dls': return await depthLimitedSearch(startCity, goal, depthLimit);
-        case 'iddfs': return await iterativeDeepeningSearch(startCity, goal);
-        case 'bidirectional': return await bidirectionalSearch(startCity, goal);
-        case 'greedy': return await greedyBestFirstSearch(startCity, goal);
-        case 'astar': return await aStarSearch(startCity, goal);
+        case 'bfs': return await breadthFirstSearch(startCity, goalsSet.size ? goalsSet : goal);
+        case 'dfs': return await depthFirstSearch(startCity, goalsSet.size ? goalsSet : goal);
+        case 'ucs': return await uniformCostSearch(startCity, goalsSet.size ? goalsSet : goal);
+        case 'dls': return await depthLimitedSearch(startCity, goalsSet.size ? goalsSet : goal, depthLimit);
+        case 'iddfs': return await iterativeDeepeningSearch(startCity, goalsSet.size ? goalsSet : goal);
+        case 'bidirectional': return await bidirectionalSearch(startCity, goal); // single-goal only
+        case 'greedy': return await greedyBestFirstSearch(startCity, goalsSet.size ? goalsSet : goal);
+        case 'astar': return await aStarSearch(startCity, goalsSet.size ? goalsSet : goal);
         default: throw new Error('Unknown algorithm selected');
     }
 }
@@ -357,6 +415,28 @@ function calculateStraightLineDistance(city1Id, city2Id) {
     const earthRadius = 6371; // Earth's radius in kilometers
     
     return earthRadius * c;
+}
+
+// --- Multi-goal helpers ---
+function isGoalNode(nodeId, goalOrSet) {
+    return goalOrSet instanceof Set ? goalOrSet.has(nodeId) : nodeId === goalOrSet;
+}
+
+function heuristicToGoalOrGoals(nodeId, goalOrSet) {
+    if (goalOrSet instanceof Set) {
+        if (goalOrSet.size === 0) return Infinity;
+        let minH = Infinity;
+        for (const g of goalOrSet) {
+            const h = calculateStraightLineDistance(nodeId, g);
+            if (h < minH) minH = h;
+        }
+        return minH;
+    }
+    return calculateStraightLineDistance(nodeId, goalOrSet);
+}
+
+function reachedGoalFromPath(path) {
+    return Array.isArray(path) && path.length ? path[path.length - 1] : null;
 }
 
 /**
@@ -516,6 +596,9 @@ function resetVisualization() {
             .classed('exploring path', false);
     }
 
+    // Remove heuristic labels on reset
+    d3.select('#graphContainer').select('svg').select('g').selectAll('.h-label').remove();
+
     // Clear results
     if (document.getElementById('searchResults')) {
         document.getElementById('searchResults').innerHTML = 
@@ -543,12 +626,61 @@ function resetVisualization() {
 }
 
 /**
+ * Render/update heuristic labels on the main graph for A* (h(n) to nearest goal)
+ */
+function updateHeuristicLabelsForGraph() {
+    try {
+        if (!graphData || !xScale || !yScale) return;
+        const algorithm = document.getElementById('algorithm')?.value;
+        const dest = document.getElementById('destCity')?.value || '';
+        const dest2 = document.getElementById('secondaryDestCity')?.value || '';
+        const goals = new Set([dest, dest2].filter(Boolean));
+        const gEl = d3.select('#graphContainer').select('svg').select('g');
+        if (gEl.empty()) return;
+        // Only show for A* with at least one goal
+        if (algorithm !== 'astar' || goals.size === 0) {
+            gEl.selectAll('.h-label').remove();
+            return;
+        }
+        // Data join for labels
+        const labels = gEl.selectAll('.h-label').data(graphData.nodes, d => d.id);
+        labels.enter()
+            .append('text')
+            .attr('class', 'h-label')
+            .attr('x', d => xScale(d.lon))
+            .attr('y', d => yScale(d.lat) + NODE_RADIUS + 12)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#6b7280')
+            .style('font-size', '10px')
+            .merge(labels)
+            .text(d => {
+                // h(n) = min_g distance(n,g)
+                let h = Infinity;
+                goals.forEach(g => {
+                    const val = calculateStraightLineDistance(d.id, g);
+                    if (val < h) h = val;
+                });
+                const hs = Number.isFinite(h) ? h.toFixed(1) : '∞';
+                return `h=${hs}`;
+            })
+            .attr('x', d => xScale(d.lon))
+            .attr('y', d => yScale(d.lat) + NODE_RADIUS + 12);
+        labels.exit().remove();
+    } catch (e) {
+        console.warn('Heuristic labels update skipped:', e);
+    }
+}
+
+/**
  * Reset function for dropdowns, highlights, and tree
  */
 function resetAll() {
     // Reset dropdowns
     document.getElementById('startCity').selectedIndex = 0;
     document.getElementById('destCity').selectedIndex = 0;
+    if (document.getElementById('secondaryDestCity')) {
+        document.getElementById('secondaryDestCity').selectedIndex = 0;
+    }
     // Reset third panel highlights (remove all highlights)
     d3.selectAll('#graphContainer .graph-svg circle').attr('stroke', null).attr('stroke-width', null);
     d3.selectAll('#graphContainer .graph-svg path').attr('stroke', null).attr('stroke-width', null);
@@ -563,10 +695,21 @@ function displaySearchResults(result, algorithm, asString) {
     const resultsContainer = document.getElementById('searchResults');
     
     let html = `<div class="result-item ${result.success ? 'success' : 'error'}">`;
-    html += `<h3 class="font-semibold mb-2">${getAlgorithmName(algorithm)} Results</h3>`;
+    // Build header with optional reached-goal and multi-goal badge
+    const primaryGoal = document.getElementById('destCity')?.value || '';
+    const secondaryGoal = document.getElementById('secondaryDestCity')?.value || '';
+    const isMultiGoal = algorithm !== 'bidirectional' && !!secondaryGoal;
+    const reachedLabel = result.success && result.reachedGoal ? ` – Goal: ${result.reachedGoal}` : '';
+    const badge = isMultiGoal
+        ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700" title="Goals: ${primaryGoal}${secondaryGoal ? ', ' + secondaryGoal : ''}">Multi-goal</span>`
+        : '';
+    html += `<h3 class="font-semibold mb-2">${getAlgorithmName(algorithm)} Results${reachedLabel} ${badge}</h3>`;
     
     if (result.success) {
         html += `<p><strong>Path Found:</strong> ${result.path.join(' → ')}</p>`;
+        if (result.reachedGoal) {
+            html += `<p><strong>Reached Goal:</strong> ${result.reachedGoal}</p>`;
+        }
         html += `<p><strong>Total Distance:</strong> ${result.cost} km</p>`;
         html += `<p><strong>Nodes Explored:</strong> ${result.nodesExplored}</p>`;
         if (typeof result.nodesDiscovered === 'number') {
@@ -583,7 +726,7 @@ function displaySearchResults(result, algorithm, asString) {
 
         // Show heuristic values along the path for Greedy Best-First and A*
         if ((algorithm === 'greedy' || algorithm === 'astar') && Array.isArray(result.path) && result.path.length > 0) {
-            const goalCity = document.getElementById('destCity')?.value;
+            const goalCity = result.reachedGoal || result.path[result.path.length - 1];
             if (goalCity) {
                 const heuristics = result.path.map(city => {
                     const h = calculateStraightLineDistance(city, goalCity);
@@ -596,7 +739,7 @@ function displaySearchResults(result, algorithm, asString) {
 
         // For A*, also show a compact table of g(n), h(n), f(n) for the final path
         if (algorithm === 'astar' && Array.isArray(result.path) && result.path.length > 0) {
-            const goalCity = document.getElementById('destCity')?.value;
+            const goalCity = result.reachedGoal || result.path[result.path.length - 1];
             if (goalCity) {
                 let gSoFar = 0;
                 const rows = result.path.map((city, idx) => {
@@ -655,7 +798,7 @@ function displaySearchResults(result, algorithm, asString) {
 
         // For Greedy, show the same g(n), h(n), f(n) table for interpretability
         if (algorithm === 'greedy' && Array.isArray(result.path) && result.path.length > 0) {
-            const goalCity = document.getElementById('destCity')?.value;
+            const goalCity = result.reachedGoal || result.path[result.path.length - 1];
             if (goalCity) {
                 let gSoFar = 0;
                 const rows = result.path.map((city, idx) => {
@@ -873,7 +1016,7 @@ async function breadthFirstSearch(start, goal) {
         
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             const cost = calculatePathCost(path);
             return {
@@ -883,6 +1026,7 @@ async function breadthFirstSearch(start, goal) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -935,7 +1079,7 @@ async function depthFirstSearch(start, goal) {
         
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             const cost = calculatePathCost(path);
             return {
@@ -945,6 +1089,7 @@ async function depthFirstSearch(start, goal) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -1008,7 +1153,7 @@ async function uniformCostSearch(start, goal) {
         
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             return {
                 success: true,
@@ -1017,6 +1162,7 @@ async function uniformCostSearch(start, goal) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -1065,7 +1211,7 @@ async function depthLimitedSearch(start, goal, depthLimit) {
         nodesExplored++;
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             const cost = calculatePathCost(path);
             return {
@@ -1075,6 +1221,7 @@ async function depthLimitedSearch(start, goal, depthLimit) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -1293,7 +1440,7 @@ async function bidirectionalSearch(start, goal) {
 async function greedyBestFirstSearch(start, goal) {
     const startTime = Date.now();
     
-    const frontier = [{ node: start, path: [start], heuristic: calculateStraightLineDistance(start, goal) }];
+    const frontier = [{ node: start, path: [start], heuristic: heuristicToGoalOrGoals(start, goal) }];
     const visited = new Set();
     let nodesExplored = 0;
     let nodesDiscovered = 1;
@@ -1316,7 +1463,7 @@ async function greedyBestFirstSearch(start, goal) {
         
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             const cost = calculatePathCost(path);
             return {
@@ -1326,6 +1473,7 @@ async function greedyBestFirstSearch(start, goal) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -1337,7 +1485,7 @@ async function greedyBestFirstSearch(start, goal) {
                 frontier.push({
                     node: neighbor.id,
                     path: [...path, neighbor.id],
-                    heuristic: calculateStraightLineDistance(neighbor.id, goal)
+                    heuristic: heuristicToGoalOrGoals(neighbor.id, goal)
                 });
                 nodesDiscovered++;
             }
@@ -1367,8 +1515,8 @@ async function aStarSearch(start, goal) {
         node: start, 
         path: [start], 
         cost: 0,
-        heuristic: calculateStraightLineDistance(start, goal),
-        f: calculateStraightLineDistance(start, goal)
+        heuristic: heuristicToGoalOrGoals(start, goal),
+        f: heuristicToGoalOrGoals(start, goal)
     }];
     
     const visited = new Set();
@@ -1393,7 +1541,7 @@ async function aStarSearch(start, goal) {
         
         await animateNodeExploration(currentNode);
         
-        if (currentNode === goal) {
+        if (isGoalNode(currentNode, goal)) {
             await animatePath(path);
             return {
                 success: true,
@@ -1402,6 +1550,7 @@ async function aStarSearch(start, goal) {
                 nodesExplored,
                 nodesDiscovered,
                 edgesProcessed,
+                reachedGoal: reachedGoalFromPath(path),
                 executionTime: Date.now() - startTime
             };
         }
@@ -1411,7 +1560,7 @@ async function aStarSearch(start, goal) {
             edgesProcessed++;
             if (!visited.has(neighbor.id)) {
                 const newCost = cost + neighbor.distance;
-                const heuristic = calculateStraightLineDistance(neighbor.id, goal);
+                const heuristic = heuristicToGoalOrGoals(neighbor.id, goal);
                 const f = newCost + heuristic;
                 
                 frontier.push({
@@ -1468,10 +1617,10 @@ function buildAlgorithmTreeNoLoops(node, path, goalSet, getNeighbors, algorithm)
     if (algorithm === 'ucs') {
         neighbors = getNeighbors(node).sort((a, b) => a.distance - b.distance).map(n => n.id);
     } else if (algorithm === 'greedy' || algorithm === 'astar') {
-        // Use straight-line distance to first goal
-        const goal = Array.from(goalSet)[0];
+        // Use min straight-line distance to any goal
         neighbors = getNeighbors(node).sort((a, b) =>
-            calculateStraightLineDistance(a.id, goal) - calculateStraightLineDistance(b.id, goal)
+            Math.min(...Array.from(goalSet).map(g => calculateStraightLineDistance(a.id, g))) -
+            Math.min(...Array.from(goalSet).map(g => calculateStraightLineDistance(b.id, g)))
         ).map(n => n.id);
     }
     if (algorithm === 'dfs') {
@@ -1490,7 +1639,8 @@ function renderAlgorithmTreePanelNoLoops() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goalSet = new Set([goal1].filter(Boolean));
+    const goal2 = document.getElementById('secondaryDestCity')?.value;
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
     const container = document.getElementById('selectedStateSpaceGraph');
     container.innerHTML = '';
     if (!algorithm || !startCity || goalSet.size === 0) {
@@ -1583,10 +1733,10 @@ function buildAlgorithmTreeLimited(node, path, goalSet, getNeighbors, algorithm,
     if (algorithm === 'ucs') {
         neighbors = getNeighbors(node).sort((a, b) => a.distance - b.distance).map(n => n.id);
     } else if (algorithm === 'greedy' || algorithm === 'astar') {
-        // Use straight-line distance to first goal
-        const goal = Array.from(goalSet)[0];
+        // Use min straight-line distance to any goal
         neighbors = getNeighbors(node).sort((a, b) =>
-            calculateStraightLineDistance(a.id, goal) - calculateStraightLineDistance(b.id, goal)
+            Math.min(...Array.from(goalSet).map(g => calculateStraightLineDistance(a.id, g))) -
+            Math.min(...Array.from(goalSet).map(g => calculateStraightLineDistance(b.id, g)))
         ).map(n => n.id);
     }
     if (algorithm === 'dfs') {
@@ -1605,7 +1755,8 @@ function renderAlgorithmTreePanelLimited() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goalSet = new Set([goal1].filter(Boolean));
+    const goal2 = document.getElementById('secondaryDestCity')?.value;
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
     const container = document.getElementById('selectedStateSpaceGraph');
     container.innerHTML = '';
     if (!algorithm || !startCity || goalSet.size === 0) {
@@ -1714,6 +1865,9 @@ window.addEventListener('resize', function() {
         d3.selectAll('.edge-label')
             .attr('x', d => (xScale(getNodeById(d.source).lon) + xScale(getNodeById(d.target).lon)) / 2)
             .attr('y', d => (yScale(getNodeById(d.source).lat) + yScale(getNodeById(d.target).lat)) / 2);
+
+        // Reposition heuristic labels
+        updateHeuristicLabelsForGraph();
     }
 });
 
@@ -1762,7 +1916,8 @@ function renderTreeSearchGraph() {
     const algorithm = document.getElementById('algorithm').value;
     const startCity = document.getElementById('startCity').value;
     const goal1 = document.getElementById('destCity').value;
-    const goalSet = new Set([goal1].filter(Boolean));
+    const goal2 = document.getElementById('secondaryDestCity')?.value;
+    const goalSet = new Set([goal1, goal2].filter(Boolean));
     const container = document.getElementById('treeSearchGraph');
     container.innerHTML = '';
     if (!startCity || goalSet.size === 0) {
@@ -1829,5 +1984,7 @@ function renderTreeSearchGraph() {
 document.getElementById('algorithm').addEventListener('change', renderTreeSearchGraph);
 document.getElementById('startCity').addEventListener('change', renderTreeSearchGraph);
 document.getElementById('destCity').addEventListener('change', renderTreeSearchGraph);
-// secondary DEC removed
+if (document.getElementById('secondaryDestCity')) {
+    document.getElementById('secondaryDestCity').addEventListener('change', renderTreeSearchGraph);
+}
 window.addEventListener('DOMContentLoaded', renderTreeSearchGraph);
